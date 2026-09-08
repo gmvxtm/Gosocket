@@ -4,7 +4,7 @@ Aplicacion fullstack offline-first para crear solicitudes localmente, procesarla
 
 ## Servicios
 
-- `web/`: frontend React.
+- `web/`: frontend React + TypeScript, con React Query y componentes separados.
 - `sync-service/`: servicio Node.js independiente. Persiste solicitudes en PostgreSQL local y sincroniza pendientes.
 - `backend/`: API .NET 10. Registra solicitudes procesadas en PostgreSQL central.
 - `docker-compose.yml`: levanta las bases `requests_local` y `requests_central`.
@@ -86,11 +86,19 @@ URLs:
 2. El sync-service guarda las solicitudes en PostgreSQL local con estado `Pending`.
 3. Al sincronizar, toma las pendientes, transforma el `payload` segun `type` y las envia al backend.
 4. El backend registra las solicitudes de forma idempotente usando el `Id` generado localmente.
-5. El sync-service marca las solicitudes como `Processed` o `Failed`.
+5. El sync-service marca como `Processed` solo las confirmadas. Los errores de procesamiento quedan `Failed`; las solicitudes sin confirmacion permanecen `Pending` para un nuevo envio.
+
+El modo offline requiere que el frontend, Node.js y PostgreSQL local esten disponibles. La sincronizacion es manual, con hasta tres intentos por lote ante fallos transitorios del backend.
+
+## Patrones y decisiones
+
+El backend usa Clean Architecture, CQRS con MediatR, validacion por pipeline y EF Core como Unit of Work. Node separa transporte, casos de uso y persistencia mediante dependencias inyectadas; utiliza Strategy para procesadores y Composite para grupos. React separa datos remotos (React Query) y estado local de UI (useState).
+
+Ver [arquitectura, patrones y limites](docs/architecture.md) para el flujo, ubicacion de cada patron, garantias de entrega y decisiones de alcance.
 
 ## Procesamiento por tipo
 
-Los procesadores viven en `sync-service/src/processors.js`. Agregar un nuevo tipo implica registrar una nueva entrada en el mapa de procesadores, sin cambiar el flujo principal de sincronizacion.
+Los procesadores viven en `sync-service/src/processors.js`. `ProcessorRegistry` acepta entradas `[type, funcion]` en su constructor; agregar una estrategia no requiere cambiar el flujo principal de sincronizacion.
 
 Tipos incluidos:
 
@@ -103,6 +111,8 @@ Tipos incluidos:
 
 El sync-service permite crear grupos con solicitudes y otros grupos. Las funciones de `sync-service/src/groups.js` calculan el total de solicitudes contenidas y permiten sincronizar un grupo completo.
 
+`RequestLeaf` y `RequestGroup` comparten las operaciones `count()` y `requestIds()`. El conteo incluye ocurrencias y la sincronizacion deduplica los Id. Se validan referencias y ciclos; los grupos se administran mediante la API local.
+
 ## Backend
 
 Endpoint principal:
@@ -110,6 +120,8 @@ Endpoint principal:
 ```http
 POST /requests/sync
 ```
+
+Consulta central para comprobar un registro: `GET /requests/{id}`. Devuelve el payload procesado o 404 si el Id no existe.
 
 El backend usa Clean Architecture:
 
@@ -135,3 +147,34 @@ Frontend:
 cd web
 npm run build
 ```
+
+Pruebas de Node y React, sin bases de datos:
+
+```powershell
+cd sync-service
+npm.cmd test
+```
+
+En otra terminal, desde la raiz del repositorio:
+
+```powershell
+cd web
+npm.cmd test
+```
+
+Integracion con PostgreSQL y backend en ejecucion (desde `sync-service`):
+
+```powershell
+$env:RUN_DB_TESTS='1'
+node --test test/postgres.integration.test.js
+Remove-Item Env:RUN_DB_TESTS
+```
+
+Pruebas E2E con los tres servicios activos (desde `web`):
+
+```powershell
+npx playwright install chromium
+npm.cmd run test:e2e
+```
+
+Para usar Chrome instalado, se puede definir `$env:PLAYWRIGHT_BROWSER_CHANNEL='chrome'` y ejecutar `npm.cmd run test:e2e` sin descargar Chromium. Las pruebas cubren escritorio y movil y generan capturas en `web/test-results/` (ignorado por Git).
