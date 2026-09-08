@@ -1,15 +1,90 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using FluentValidation;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http.Json;
+using MediatR;
+using RequestHub.Application;
+using RequestHub.Application.Requests.Commands.RegisterRequests;
+using RequestHub.Application.Requests.Dtos;
+using RequestHub.Infrastructure;
+using RequestHub.Infrastructure.Persistence;
+using Serilog;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, config) =>
+    config.ReadFrom.Configuration(context.Configuration)
+          .WriteTo.Console());
+
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.Configure<JsonOptions>(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>("database");
 
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await DbInitializer.InitializeAsync(db);
+}
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
-   .WithName("Health");
+app.UseSerilogRequestLogging();
 
-app.Run();
+app.MapPost("/requests/sync", async (
+    IReadOnlyList<RegisterRequestDto> requests,
+    ISender sender,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await sender.Send(new RegisterRequestsCommand(requests), cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (ValidationException ex)
+    {
+        var errors = ex.Errors
+            .GroupBy(error => error.PropertyName)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(error => error.ErrorMessage).ToArray());
+
+        return Results.ValidationProblem(errors);
+    }
+})
+.WithName("SyncRequests")
+.WithSummary("Registers processed requests coming from the offline sync service.");
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var payload = JsonSerializer.Serialize(new
+        {
+            status = report.Status.ToString(),
+            totalDurationMs = Math.Round(report.TotalDuration.TotalMilliseconds, 1),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                durationMs = Math.Round(e.Value.Duration.TotalMilliseconds, 1)
+            })
+        });
+        await context.Response.WriteAsync(payload);
+    }
+});
+
+await app.RunAsync();
