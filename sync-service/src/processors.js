@@ -1,20 +1,22 @@
-const processors = new Map([
+export const defaultProcessors = [
   ['text.uppercase', payload => String(payload).toUpperCase()],
   ['text.lowercase', payload => String(payload).toLowerCase()],
   ['text.trim', payload => String(payload).trim()],
   ['json.normalize', payload => JSON.stringify(JSON.parse(payload))]
-]);
+];
 
-export function processPayload(type, payload) {
-  const processor = processors.get(type);
-
-  if (!processor) {
-    throw new Error(`Unsupported request type: ${type}`);
+export class ProcessorRegistry {
+  constructor(entries = defaultProcessors) {
+    this.processors = new Map(entries);
   }
 
-  return processor(payload);
-}
+  process(type, payload) {
+    const processor = this.processors.get(type);
+    if (!processor) throw new Error(`Unsupported request type: ${type}`);
+    return processor(payload);
+  }
 
-export function listProcessorTypes() {
-  return [...processors.keys()];
+  types() {
+    return [...this.processors.keys()];
+  }
 }
