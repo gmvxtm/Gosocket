@@ -1,0 +1,6 @@
+@RequestHub.Api_HostAddress = http://localhost:5080
+
+GET {{RequestHub.Api_HostAddress}}/health
+Accept: application/json
+
+###

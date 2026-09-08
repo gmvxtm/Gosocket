@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RequestHub.Api/RequestHub.Api.csproj" />
+    <Project Path="src/RequestHub.Application/RequestHub.Application.csproj" />
+    <Project Path="src/RequestHub.Domain/RequestHub.Domain.csproj" />
+    <Project Path="src/RequestHub.Infrastructure/RequestHub.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RequestHub.Tests/RequestHub.Tests.csproj" />
+  </Folder>
+</Solution>
