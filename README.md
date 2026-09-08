@@ -12,7 +12,7 @@ Aplicacion fullstack offline-first para crear solicitudes localmente, procesarla
 ## Requisitos
 
 - Docker
-- Node.js 20+
+- Node.js 22.13+ (rama 22), 24 o 26+ para ejecutar tambien las pruebas del frontend
 - .NET SDK 10
 
 ## Configuracion
