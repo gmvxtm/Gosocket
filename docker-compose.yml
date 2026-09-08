@@ -1,0 +1,38 @@
+services:
+  postgres-local:
+    image: postgres:18-alpine
+    container_name: offline-requests-local-db
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: requests_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - local-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d requests_local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-central:
+    image: postgres:18-alpine
+    container_name: offline-requests-central-db
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: requests_central
+    ports:
+      - "5433:5432"
+    volumes:
+      - central-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d requests_central"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  local-data:
+  central-data:
