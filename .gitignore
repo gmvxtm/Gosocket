@@ -5,6 +5,8 @@ obj/
 *.suo
 .vs/
 TestResults/
+test-results/
+playwright-report/
 
 # Node
 node_modules/

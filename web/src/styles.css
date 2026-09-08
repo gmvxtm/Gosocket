@@ -116,13 +116,12 @@ button:hover {
 .content-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: 300px minmax(320px, 1fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .panel {
-  background: #ffffff;
-  border: 1px solid #d9e1ea;
-  border-radius: 8px;
+  min-width: 0;
+  border-top: 1px solid #cbd5e1;
   padding: 18px;
 }
 
@@ -166,6 +165,8 @@ textarea {
 .row span:first-child {
   display: grid;
   gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .selected {
@@ -174,6 +175,7 @@ textarea {
 }
 
 .pill {
+  flex-shrink: 0;
   border-radius: 999px;
   font-size: 12px;
   padding: 5px 8px;
@@ -215,15 +217,29 @@ pre {
   white-space: pre-wrap;
 }
 
-.toast {
-  background: #18202a;
-  border-radius: 8px;
-  bottom: 18px;
-  color: #ffffff;
-  left: 50%;
+.feedback {
+  border-left: 3px solid #116a5c;
   padding: 10px 14px;
-  position: fixed;
-  transform: translateX(-50%);
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.error-message {
+  color: #9b1c1c;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 940px) {
