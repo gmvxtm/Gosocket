@@ -7,6 +7,7 @@ using MediatR;
 using RequestHub.Application;
 using RequestHub.Application.Requests.Commands.RegisterRequests;
 using RequestHub.Application.Requests.Dtos;
+using RequestHub.Application.Requests.Queries.GetRequest;
 using RequestHub.Infrastructure;
 using RequestHub.Infrastructure.Persistence;
 using Serilog;
@@ -66,6 +67,14 @@ app.MapPost("/requests/sync", async (
 })
 .WithName("SyncRequests")
 .WithSummary("Registers processed requests coming from the offline sync service.");
+
+app.MapGet("/requests/{id:guid}", async (Guid id, ISender sender, CancellationToken cancellationToken) =>
+{
+    var request = await sender.Send(new GetRequestQuery(id), cancellationToken);
+    return request is null ? Results.NotFound() : Results.Ok(request);
+})
+.WithName("GetRegisteredRequest")
+.WithSummary("Returns a centrally registered request for synchronization verification.");
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
