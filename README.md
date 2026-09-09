@@ -111,7 +111,9 @@ Tipos incluidos:
 
 El sync-service permite crear grupos con solicitudes y otros grupos. Las funciones de `sync-service/src/groups.js` calculan el total de solicitudes contenidas y permiten sincronizar un grupo completo.
 
-`RequestLeaf` y `RequestGroup` comparten las operaciones `count()` y `requestIds()`. El conteo incluye ocurrencias y la sincronizacion deduplica los Id. Se validan referencias y ciclos; los grupos se administran mediante la API local.
+`RequestLeaf` y `RequestGroup` comparten las operaciones `count()` y `requestIds()`. El conteo incluye ocurrencias y la sincronizacion deduplica los Id. Se validan referencias y ciclos.
+
+El frontend expone la seccion **Groups**: se arma un grupo eligiendo solicitudes y otros grupos ya existentes, cada grupo muestra el total de solicitudes que contiene recorriendo todo el arbol, y el boton `Sync group` sincroniza el grupo completo en una sola accion. Como un grupo solo puede referenciar elementos creados antes que el, un ciclo es imposible por construccion.
 
 ## Backend
 

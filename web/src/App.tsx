@@ -4,22 +4,32 @@ import { RefreshCw, Send, Wifi, WifiOff } from 'lucide-react';
 import { RequestForm } from './components/RequestForm';
 import { RequestList } from './components/RequestList';
 import { RequestDetail } from './components/RequestDetail';
-import { localKeys, useCreateRequest, useProcessors, useRequests, useServiceHealth, useSynchronize } from './hooks/useRequests';
+import { GroupPanel } from './components/GroupPanel';
+import {
+  localKeys, useCreateGroup, useCreateRequest, useGroups, useGroupTotals,
+  useProcessors, useRequests, useServiceHealth, useSynchronize, useSynchronizeGroup
+} from './hooks/useRequests';
 
 export function App() {
   const client = useQueryClient();
   const requestsQuery = useRequests();
   const processorsQuery = useProcessors();
+  const groupsQuery = useGroups();
   const health = useServiceHealth();
   const create = useCreateRequest();
+  const createGroup = useCreateGroup();
   const synchronize = useSynchronize();
+  const synchronizeGroup = useSynchronizeGroup();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const requests = requestsQuery.data ?? [];
+  const groups = groupsQuery.data ?? [];
+  const totals = useGroupTotals(groups.map(group => group.id));
   const selected = requests.find(request => request.id === selectedId) ?? requests[0];
   const serviceOnline = health.isSuccess && health.data.status === 'Healthy';
-  const queryError = requestsQuery.error ?? processorsQuery.error ?? health.error;
-  const message = synchronize.error?.message ?? queryError?.message ?? (
-    synchronize.isSuccess ? 'Sent ' + synchronize.data.sent + ', failed ' + synchronize.data.failed.length : ''
+  const queryError = requestsQuery.error ?? processorsQuery.error ?? groupsQuery.error ?? health.error;
+  const lastSync = synchronize.isSuccess ? synchronize.data : synchronizeGroup.isSuccess ? synchronizeGroup.data : null;
+  const message = synchronize.error?.message ?? synchronizeGroup.error?.message ?? queryError?.message ?? (
+    lastSync ? 'Sent ' + lastSync.sent + ', failed ' + lastSync.failed.length : ''
   );
 
   return (
@@ -42,13 +52,18 @@ export function App() {
             </button>
           </div>
         </header>
-        {message && <p role={synchronize.error || queryError ? 'alert' : 'status'} className="feedback">{message}</p>}
+        {message && <p role={synchronize.error || synchronizeGroup.error || queryError ? 'alert' : 'status'} className="feedback">{message}</p>}
         <section className="content-grid">
           <RequestForm processors={processorsQuery.data ?? []} pending={create.isPending}
             onCreate={create.mutateAsync} onCreated={request => { setSelectedId(request.id); synchronize.reset(); }} />
           <RequestList requests={requests} selectedId={selected?.id} loading={requestsQuery.isPending} onSelect={setSelectedId} />
           <RequestDetail request={selected} />
         </section>
+        <GroupPanel groups={groups} requests={requests} totals={totals}
+          loading={groupsQuery.isPending} creating={createGroup.isPending}
+          syncingId={synchronizeGroup.isPending ? synchronizeGroup.variables : null}
+          onCreate={createGroup.mutateAsync}
+          onSynchronize={id => { synchronize.reset(); synchronizeGroup.mutate(id); }} />
       </section>
     </main>
   );

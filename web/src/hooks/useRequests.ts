@@ -1,11 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { requestsApi } from '../api';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { groupsApi, requestsApi } from '../api';
 
 export const localKeys = {
   all: ['local'] as const,
   requests: ['local', 'requests'] as const,
   processors: ['local', 'processors'] as const,
-  health: ['local', 'health'] as const
+  health: ['local', 'health'] as const,
+  groups: ['local', 'groups'] as const,
+  groupTotal: (id: string) => ['local', 'groups', id, 'total'] as const
 };
 
 export function useRequests() {
@@ -38,5 +40,36 @@ export function useSynchronize() {
     mutationFn: requestsApi.synchronize,
     // A failed later batch may still leave earlier batches confirmed.
     onSettled: () => client.invalidateQueries({ queryKey: localKeys.requests })
+  });
+}
+
+export function useGroups() {
+  return useQuery({ queryKey: localKeys.groups, queryFn: ({ signal }) => groupsApi.list(signal) });
+}
+
+// The total walks the whole tree, so the service owns the arithmetic instead of the browser.
+export function useGroupTotals(ids: string[]) {
+  const results = useQueries({
+    queries: ids.map(id => ({
+      queryKey: localKeys.groupTotal(id),
+      queryFn: ({ signal }: { signal?: AbortSignal }) => groupsApi.total(id, signal)
+    }))
+  });
+  return new Map(ids.map((id, index) => [id, results[index]?.data?.total]));
+}
+
+export function useCreateGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: groupsApi.create,
+    onSuccess: () => client.invalidateQueries({ queryKey: localKeys.groups })
+  });
+}
+
+export function useSynchronizeGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: groupsApi.synchronize,
+    onSettled: () => client.invalidateQueries({ queryKey: localKeys.all })
   });
 }

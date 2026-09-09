@@ -23,6 +23,25 @@ export interface SyncResult {
   acknowledgements: { id: string; status: RequestStatus; receivedAt: string; alreadyRegistered: boolean }[];
 }
 
+export type GroupItemKind = 'request' | 'group';
+
+export interface GroupItem {
+  kind: GroupItemKind;
+  id: string;
+}
+
+export interface LocalGroup {
+  id: string;
+  name: string;
+  items: GroupItem[];
+  createdAt: string;
+}
+
+export interface CreateGroupInput {
+  name: string;
+  items: GroupItem[];
+}
+
 const apiBaseUrl = import.meta.env.VITE_SYNC_SERVICE_URL ?? 'http://localhost:3001';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -43,4 +62,11 @@ export const requestsApi = {
   list: (signal?: AbortSignal) => request<LocalRequest[]>('/requests', { signal }),
   create: (input: CreateRequestInput) => request<LocalRequest>('/requests', { method: 'POST', body: JSON.stringify(input) }),
   synchronize: () => request<SyncResult>('/sync', { method: 'POST' })
+};
+
+export const groupsApi = {
+  list: (signal?: AbortSignal) => request<LocalGroup[]>('/groups', { signal }),
+  create: (input: CreateGroupInput) => request<LocalGroup>('/groups', { method: 'POST', body: JSON.stringify(input) }),
+  total: (id: string, signal?: AbortSignal) => request<{ total: number }>('/groups/' + id + '/total', { signal }),
+  synchronize: (id: string) => request<SyncResult>('/groups/' + id + '/sync', { method: 'POST' })
 };

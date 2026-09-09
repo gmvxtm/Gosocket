@@ -34,7 +34,7 @@ La copia local conserva el payload original, para que un reenvio no aplique la t
 | Dependency Inversion / DI | IAppDbContext; dependencias inyectadas en createApplication | Permite probar casos de uso sin servidor HTTP ni una base real |
 | Repository | createPostgresRepository(pool), sync-service/src/db.js | Encapsula SQL parametrizado y mapeo de filas |
 | Strategy | ProcessorRegistry, sync-service/src/processors.js | Selecciona la transformacion por type; acepta estrategias nuevas por constructor |
-| Composite | RequestLeaf y RequestGroup, sync-service/src/groups.js | Expone count y requestIds tanto en hojas como en grupos anidados |
+| Composite | RequestLeaf y RequestGroup, sync-service/src/groups.js; web/src/components/GroupPanel.tsx lo consume | Expone count y requestIds tanto en hojas como en grupos anidados |
 | Factory / composition root | server.js ensambla repositorio, registro, cliente y aplicacion | Centraliza dependencias y ciclo de vida, con HTTP separado |
 | Adapter | http.js y backend-client.js | Traduce HTTP a casos de uso y a confirmaciones del backend |
 | Retry con backoff y timeout | createBackendClient | Tolera errores transitorios sin cambiar el Id de las solicitudes |
