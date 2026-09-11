@@ -7,13 +7,12 @@ Aplicacion fullstack offline-first para crear solicitudes localmente, procesarla
 - `web/`: frontend React + TypeScript, con React Query y componentes separados.
 - `sync-service/`: servicio Node.js independiente. Persiste solicitudes en PostgreSQL local y sincroniza pendientes.
 - `backend/`: API .NET 10. Registra solicitudes procesadas en PostgreSQL central.
-- `docker-compose.yml`: levanta las bases `requests_local` y `requests_central`.
+- `docker-compose.yml`: despliega los tres servicios y las bases `requests_local` y `requests_central`.
 
 ## Requisitos
 
-- Docker
-- Node.js 22.13+ (rama 22), 24 o 26+ para ejecutar tambien las pruebas del frontend
-- .NET SDK 10
+- Docker: suficiente para desplegar la solucion completa.
+- Node.js 22.13+ (rama 22), 24 o 26+ y .NET SDK 10: solo para el modo desarrollo y para ejecutar las pruebas.
 
 ## Configuracion
 
@@ -33,32 +32,69 @@ Variables opcionales del sync-service:
 
 ```text
 PORT=3001
+HOST=127.0.0.1
 BACKEND_URL=http://localhost:5080
 DATABASE_URL=postgres://app:app@localhost:5432/requests_local
 ```
 
-Variable opcional del frontend:
+`HOST` define la interfaz de escucha. Fuera de Docker conviene dejar loopback; la imagen usa `0.0.0.0` para ser alcanzable dentro de la red de compose.
+
+Variable del frontend, leida al compilar:
 
 ```text
 VITE_SYNC_SERVICE_URL=http://localhost:3001
 ```
 
-## Ejecucion local
+En el despliegue se pasa como argumento de build en `docker-compose.yml`. Apunta al puerto publicado del sync-service porque la peticion sale del navegador, no del contenedor.
 
-Levantar bases de datos:
+El backend toma su cadena de conexion de `ConnectionStrings__Default`; el valor por defecto de `appsettings.json` apunta a `localhost:5433`.
+
+## Despliegue completo
+
+Desde la raiz del repositorio:
 
 ```powershell
-docker compose up -d
+docker compose up -d --build
 ```
 
-Ejecutar backend:
+Levanta las dos bases, el backend .NET, el sync-service y el frontend compilado y servido por nginx.
+El backend aplica sus migraciones y el sync-service crea su esquema al iniciar, por lo que no hay pasos manuales de base de datos.
+
+URLs:
+
+- Frontend: `http://localhost:8080`
+- Sync-service: `http://localhost:3001`
+- Backend: `http://localhost:5080`
+- PostgreSQL local: `localhost:5432`; central: `localhost:5433`
+
+Los tres servicios de aplicacion publican solo en `127.0.0.1`, porque no incluyen autenticacion.
+
+Estado y detencion:
+
+```powershell
+docker compose ps
+docker compose logs -f sync-service
+docker compose down
+```
+
+`docker compose down -v` elimina tambien los datos de las dos bases.
+
+## Ejecucion en modo desarrollo
+
+Solo las bases en Docker:
+
+```powershell
+docker compose up -d postgres-local postgres-central
+```
+
+Backend:
 
 ```powershell
 cd backend
 dotnet run --project src\RequestHub.Api\RequestHub.Api.csproj --urls http://localhost:5080
 ```
 
-Ejecutar sync-service:
+Sync-service:
 
 ```powershell
 cd sync-service
@@ -66,7 +102,7 @@ npm install
 npm start
 ```
 
-Ejecutar frontend:
+Frontend con recarga en caliente:
 
 ```powershell
 cd web
@@ -74,11 +110,7 @@ npm install
 npm run dev
 ```
 
-URLs:
-
-- Frontend: `http://localhost:5173`
-- Sync-service: `http://localhost:3001`
-- Backend: `http://localhost:5080`
+El frontend de desarrollo queda en `http://localhost:5173`. Si el stack completo esta arriba, sus contenedores `backend`, `sync-service` y `web` ocupan los puertos 5080, 3001 y 8080: conviene detenerlos antes (`docker compose stop backend sync-service web`).
 
 ## Flujo
 
@@ -172,11 +204,14 @@ node --test test/postgres.integration.test.js
 Remove-Item Env:RUN_DB_TESTS
 ```
 
-Pruebas E2E con los tres servicios activos (desde `web`):
+Pruebas E2E sobre la solucion desplegada (desde `web`):
 
 ```powershell
 npx playwright install chromium
+$env:E2E_WEB_URL='http://localhost:8080'
 npm.cmd run test:e2e
 ```
 
-Para usar Chrome instalado, se puede definir `$env:PLAYWRIGHT_BROWSER_CHANNEL='chrome'` y ejecutar `npm.cmd run test:e2e` sin descargar Chromium. Las pruebas cubren escritorio y movil y generan capturas en `web/test-results/` (ignorado por Git).
+Sin `E2E_WEB_URL` apuntan al servidor de desarrollo en `http://localhost:5173`. Con `$env:PLAYWRIGHT_BROWSER_CHANNEL='chrome'` se usa el Chrome instalado en lugar de descargar Chromium.
+
+Cada prueba corre en escritorio y movil y genera capturas en `web/test-results/` (ignorado por Git).

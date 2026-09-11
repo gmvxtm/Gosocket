@@ -33,6 +33,62 @@ services:
       timeout: 3s
       retries: 10
 
+  backend:
+    build: ./backend
+    container_name: offline-requests-backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=postgres-central;Port=5432;Database=requests_central;Username=app;Password=app
+    ports:
+      - "127.0.0.1:5080:8080"
+    depends_on:
+      postgres-central:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+  sync-service:
+    build: ./sync-service
+    container_name: offline-requests-sync
+    environment:
+      DATABASE_URL: postgres://app:app@postgres-local:5432/requests_local
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "-", "http://127.0.0.1:3001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  web:
+    build:
+      context: ./web
+      args:
+        # El navegador corre en el host, por eso apunta al puerto publicado del sync-service.
+        VITE_SYNC_SERVICE_URL: http://localhost:3001
+    container_name: offline-requests-web
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      sync-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
 volumes:
   local-data:
   central-data:

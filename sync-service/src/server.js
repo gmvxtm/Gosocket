@@ -21,7 +21,7 @@ const application = createApplication({
   backend: createBackendClient({ baseUrl: config.backendUrl })
 });
 const server = createHttpServer({ application, backendUrl: config.backendUrl });
-server.listen(config.port, '127.0.0.1', () => {
+server.listen(config.port, config.host, () => {
   console.log('Sync service listening on http://localhost:' + config.port);
 });
 
