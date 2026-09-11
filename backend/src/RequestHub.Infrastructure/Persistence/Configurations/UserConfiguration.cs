@@ -23,5 +23,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(u => u.Username).IsUnique();
 
         builder.ConfigureAudit();
+
+        builder.Property<uint>("Version")
+            .IsRowVersion();
     }
 }

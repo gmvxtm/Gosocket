@@ -12,6 +12,10 @@ public interface IAppDbContext
 {
     DbSet<Request> Requests { get; }
 
+    DbSet<RequestType> RequestTypes { get; }
+
+    DbSet<SyncIssue> SyncIssues { get; }
+
     DbSet<User> Users { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

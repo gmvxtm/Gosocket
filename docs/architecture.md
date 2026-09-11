@@ -36,6 +36,9 @@ La copia local conserva el payload original, para que un reenvio no aplique la t
 | Bulkhead | ConcurrencyLimiter sobre /requests/sync | Aisla la sincronizacion pesada del resto de endpoints |
 | Observabilidad | OpenTelemetry en .NET y Node, exportado por OTLP | Una sola traza para una operacion que cruza dos servicios |
 | Dependency Inversion / DI | IAppDbContext; dependencias inyectadas en createApplication | Permite probar casos de uso sin servidor HTTP ni una base real |
+| Esquemas por responsabilidad | core, cnfg, sgr y log en PostgreSQL central | Separa datos transaccionales, catalogos, seguridad y auditoria tecnica |
+| Catalogo extensible | cnfg.RequestTypes se completa al registrar tipos nuevos | Mantiene FK sin exigir cambios de backend por cada processor nuevo |
+| Concurrencia optimista | Shadow property Version sobre xmin de PostgreSQL | Evita agregar una columna RowVersion artificial en PostgreSQL |
 | Repository | createPostgresRepository(pool), sync-service/src/db.js | Encapsula SQL parametrizado y mapeo de filas |
 | Strategy | ProcessorRegistry, sync-service/src/processors.js | Selecciona la transformacion por type; acepta estrategias nuevas por constructor |
 | Composite | RequestLeaf y RequestGroup, sync-service/src/groups.js; web/src/components/GroupPanel.tsx lo consume | Expone count y requestIds tanto en hojas como en grupos anidados |
@@ -58,6 +61,17 @@ Es una cola local con envio posterior; no se agrega una segunda tabla Outbox de 
 
 La entrega es al menos una vez, con deduplicacion central por Id. Si se pierde la confirmacion, la solicitud sigue Pending y se puede reenviar.
 El backend devuelve alreadyRegistered para un Id previamente registrado. La prueba de integracion reproduce este caso con PostgreSQL y la API real.
+Los reenvios ya registrados y los Id repetidos dentro del mismo lote quedan auditados en `log.SyncIssues`.
+
+La base central queda dividida en cuatro esquemas:
+
+- `core`: `Requests`, datos transaccionales recibidos desde el sync-service.
+- `cnfg`: `RequestTypes`, catalogo de tipos de solicitud.
+- `sgr`: `Users`, credenciales y datos de seguridad.
+- `log`: `SyncIssues`, eventos tecnicos de sincronizacion.
+
+`core.Requests.Type` tiene FK hacia `cnfg.RequestTypes.Code`. Para no bloquear la extensibilidad del enunciado, el backend auto-crea el tipo cuando registra solicitudes nuevas. Ese es el compromiso: hay integridad referencial y catalogo consultable, sin obligar a publicar una migracion por cada nuevo processor local.
+Las entidades principales usan `xmin` como token de concurrencia optimista. EF lo mapea como shadow property `Version`; no se agrega una columna fisica porque PostgreSQL ya mantiene `xmin` por fila.
 
 La sincronizacion:
 1. Selecciona solo Pending, opcionalmente filtradas por grupo.
@@ -100,7 +114,6 @@ La sincronizacion es manual. El indicador del servicio local comprueba PostgreSQ
 - EF Core con AsNoTracking es suficiente para consultar por Id; no se incorpora Dapper sin una consulta que lo necesite.
 - No se agregan Kafka, Saga, Circuit Breaker ni un contenedor de DI a Node solo para aumentar la lista de patrones.
 - La autenticacion es de demostracion: usuario seed, clave y firma JWT de desarrollo. No se presenta como endurecimiento para exposicion publica. CORS y credenciales son de desarrollo, y los puertos de los tres servicios se publican solo en loopback.
-- No se agregan migraciones: este cambio conserva el esquema existente.
 - Los listados y la construccion del arbol cargan los registros en memoria. Paginacion, limites de profundidad y coordinacion multiproceso quedan como mejoras para mayor volumen.
 
 ## Errores y limites
@@ -142,6 +155,7 @@ El sync-service escucha en loopback por defecto y la imagen lo abre a `0.0.0.0` 
 ## Verificacion
 
 - .NET: tests de registro, consulta sin tracking, validacion y modelo/migracion.
+- EF Core/PostgreSQL real: migracion aplicada sobre la base central local, incluyendo `cnfg`, `log`, FK por tipo y `xmin`.
 - Node: extensibilidad de Strategy, Composite, ciclos y referencias, grupos vacios, lotes, confirmaciones parciales, fallos y recuperacion, timeout y errores HTTP.
 - PostgreSQL + API real: persistencia entre conexiones y recuperacion tras perder la confirmacion.
 - React: consultas y creacion con onlineManager offline, invalidacion, errores y preservacion del formulario.

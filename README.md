@@ -118,8 +118,9 @@ El frontend de desarrollo queda en `http://localhost:5173`. Si el stack completo
 1. El frontend crea solicitudes contra el sync-service.
 2. El sync-service guarda las solicitudes en PostgreSQL local con estado `Pending`.
 3. Al sincronizar, toma las pendientes, transforma el `payload` segun `type` y las envia al backend.
-4. El backend registra las solicitudes de forma idempotente usando el `Id` generado localmente.
-5. El sync-service marca como `Processed` solo las confirmadas. Los errores de procesamiento quedan `Failed`; las solicitudes sin confirmacion permanecen `Pending` para un nuevo envio.
+4. El backend cataloga automaticamente el `type` en `cnfg.RequestTypes` si aun no existe y registra la solicitud de forma idempotente usando el `Id` generado localmente.
+5. El backend guarda eventos de auditoria en `log.SyncIssues` cuando detecta Id repetidos en un lote o reenvios ya registrados.
+6. El sync-service marca como `Processed` solo las confirmadas. Los errores de procesamiento quedan `Failed`; las solicitudes sin confirmacion permanecen `Pending` para un nuevo envio.
 
 El modo offline requiere que el frontend, Node.js y PostgreSQL local esten disponibles. La sincronizacion es manual, con hasta tres intentos por lote ante fallos transitorios del backend.
 
@@ -164,6 +165,17 @@ El backend usa Clean Architecture:
 - `Application`: comandos, DTOs, validaciones y handlers.
 - `Infrastructure`: EF Core, PostgreSQL y migraciones.
 - `Api`: endpoints, logging y healthcheck.
+
+La base central usa cuatro esquemas, siguiendo el mismo criterio de separacion usado en Thesis:
+
+| Esquema | Uso |
+| --- | --- |
+| `core` | Solicitudes registradas centralmente. |
+| `cnfg` | Catalogos; hoy contiene `RequestTypes`. |
+| `sgr` | Seguridad; usuarios con hash BCrypt. |
+| `log` | Auditoria tecnica; hoy contiene `SyncIssues`. |
+
+`core.Requests.Type` queda protegido por FK hacia `cnfg.RequestTypes.Code`. Para conservar la extensibilidad pedida por la prueba, el backend crea automaticamente el catalogo cuando recibe un tipo nuevo: agregar un processor nuevo en Node no requiere modificar el backend central. EF Core usa el `xmin` interno de PostgreSQL como token de concurrencia en las entidades persistentes principales.
 
 La sincronizacion es idempotente: si el mismo `Id` llega mas de una vez, el backend devuelve confirmacion sin insertar duplicados.
 

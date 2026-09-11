@@ -26,6 +26,15 @@ public class RequestConfiguration : IEntityTypeConfiguration<Request>
 
         builder.ConfigureAudit();
 
+        builder.HasOne<RequestType>()
+            .WithMany()
+            .HasForeignKey(r => r.Type)
+            .HasPrincipalKey(t => t.Code)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property<uint>("Version")
+            .IsRowVersion();
+
         builder.HasIndex(r => r.ReceivedAt);
         builder.HasIndex(r => r.Type);
     }

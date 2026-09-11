@@ -13,6 +13,10 @@ public class AppDbContext : DbContext, IAppDbContext
 
     public DbSet<Request> Requests => Set<Request>();
 
+    public DbSet<RequestType> RequestTypes => Set<RequestType>();
+
+    public DbSet<SyncIssue> SyncIssues => Set<SyncIssue>();
+
     public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

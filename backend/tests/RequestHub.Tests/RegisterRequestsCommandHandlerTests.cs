@@ -103,6 +103,10 @@ public class RegisterRequestsCommandHandlerTests
 
         db.Requests.Should().HaveCount(2, "the retried Id must not be stored twice");
         (await db.Requests.SingleAsync(r => r.Id == existing.Id)).ReceivedAt.Should().Be(earlier, "an existing row is never overwritten");
+        db.SyncIssues.Should().ContainSingle(i =>
+            i.RequestId == existing.Id &&
+            i.IssueType == "AlreadyRegistered" &&
+            i.CreatedAt == Now);
     }
 
     [Fact]
@@ -121,6 +125,10 @@ public class RegisterRequestsCommandHandlerTests
         // Assert
         acks.Should().ContainSingle().Which.Id.Should().Be(id);
         db.Requests.Should().ContainSingle().Which.Name.Should().Be("Order 1001", "the first occurrence wins");
+        db.SyncIssues.Should().ContainSingle(i =>
+            i.RequestId == id &&
+            i.IssueType == "DuplicateInBatch" &&
+            i.CreatedAt == Now);
     }
 
     [Fact]
@@ -142,5 +150,36 @@ public class RegisterRequestsCommandHandlerTests
         stored.Type.Should().Be("text.uppercase");
         stored.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
         stored.CreatedAt.Should().Be(new DateTime(2026, 9, 8, 14, 30, 0, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public async Task Register_catalogs_new_request_types_once()
+    {
+        // Arrange
+        using var db = NewInMemoryDb();
+        db.RequestTypes.Add(new RequestType
+        {
+            Id = Guid.NewGuid(),
+            Code = "text.uppercase",
+            Name = "text.uppercase"
+        });
+        await db.SaveChangesAsync();
+
+        var handler = NewHandler(db);
+        var first = NewDto();
+        first.Type = "text.uppercase";
+        var second = NewDto(name: "Order 1002");
+        second.Type = "json.normalize";
+        var third = NewDto(name: "Order 1003");
+        third.Type = "json.normalize";
+
+        // Act
+        await handler.Handle(new RegisterRequestsCommand([first, second, third]), CancellationToken.None);
+
+        // Assert
+        var types = await db.RequestTypes.OrderBy(t => t.Code).ToListAsync();
+        types.Should().HaveCount(2);
+        types.Select(t => t.Code).Should().Equal("json.normalize", "text.uppercase");
+        types.Single(t => t.Code == "json.normalize").Name.Should().Be("json.normalize");
     }
 }
