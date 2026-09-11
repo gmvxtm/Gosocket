@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { ApplicationError } from './errors.js';
+import { withIncomingContext, withSpan } from './telemetry.js';
 
 function json(response, status, body) {
   response.writeHead(status, {
@@ -28,11 +29,15 @@ async function readBody(request) {
   }
 }
 
+// Identifiers collapse into a placeholder so the trace groups by route, not by resource.
+function routeOf(method, pathname) {
+  return method + ' ' + pathname.replace(/\/[0-9a-f-]{36}(?=\/|$)/gi, '/{id}');
+}
+
 export function createHttpServer({ application, backendUrl, logger = console }) {
-  return createServer(async (request, response) => {
+  async function dispatch(request, response, pathname) {
     try {
       if (request.method === 'OPTIONS') return json(response, 204);
-      const { pathname } = new URL(request.url, 'http://localhost');
 
       if (request.method === 'GET' && pathname === '/health') {
         try {
@@ -60,5 +65,21 @@ export function createHttpServer({ application, backendUrl, logger = console }) 
       logger.error({ event: 'request_failed', method: request.method, error });
       return json(response, 500, { error: 'Unexpected service error' });
     }
+  }
+
+  return createServer(async (request, response) => {
+    const { pathname } = new URL(request.url, 'http://localhost');
+
+    // The container probes this every few seconds: tracing it would bury the real traffic.
+    if (pathname === '/health') return dispatch(request, response, pathname);
+
+    await withIncomingContext(request.headers, () =>
+      withSpan(routeOf(request.method, pathname), {
+        'http.request.method': request.method,
+        'url.path': pathname
+      }, async span => {
+        await dispatch(request, response, pathname);
+        span.setAttribute('http.response.status_code', response.statusCode);
+      }));
   });
 }

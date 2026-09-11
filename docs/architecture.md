@@ -34,6 +34,7 @@ La copia local conserva el payload original, para que un reenvio no aplique la t
 | Manejador global de errores | GlobalExceptionHandler, IExceptionHandler de ASP.NET | Un unico contrato de error, con ProblemDetails y traceId |
 | Rate limiting | Ventana fija por llamante, RateLimitingSetup | Impide que un cliente agote la capacidad de la API |
 | Bulkhead | ConcurrencyLimiter sobre /requests/sync | Aisla la sincronizacion pesada del resto de endpoints |
+| Observabilidad | OpenTelemetry en .NET y Node, exportado por OTLP | Una sola traza para una operacion que cruza dos servicios |
 | Dependency Inversion / DI | IAppDbContext; dependencias inyectadas en createApplication | Permite probar casos de uso sin servidor HTTP ni una base real |
 | Repository | createPostgresRepository(pool), sync-service/src/db.js | Encapsula SQL parametrizado y mapeo de filas |
 | Strategy | ProcessorRegistry, sync-service/src/processors.js | Selecciona la transformacion por type; acepta estrategias nuevas por constructor |
@@ -106,6 +107,20 @@ Siempre agrega `traceId` con el identificador de la actividad, que es el mismo q
 El limite por ventana y el bulkhead resuelven problemas distintos. La ventana protege de un cliente que llama demasiado seguido; el bulkhead protege la base de datos, porque cada sincronizacion escribe un lote de hasta 500 filas.
 Sin bulkhead, varias sincronizaciones grandes en paralelo consumirian el pool de conexiones y dejarian sin respuesta a las consultas y al healthcheck.
 El rechazo es inmediato y explicito, con `Retry-After`; el sync-service ya reintenta 429 con backoff, asi que el lote no se pierde.
+
+## Telemetria
+
+En .NET la instrumentacion es automatica: ASP.NET Core, HttpClient y el ActivitySource de Npgsql, mas metricas del runtime y del rate limiter. Serilog conserva la consola y agrega un sink OTLP, de modo que el log llega al dashboard con el `traceId` de la peticion que lo genero.
+
+En Node la instrumentacion es manual, en dos bordes: el servidor HTTP y el cliente del backend.
+La alternativa era el parcheo automatico de modulos, que bajo ESM depende de hooks del cargador; con dos bordes que instrumentar, escribirlos a mano resulta mas predecible y deja explicito el punto donde se propaga el contexto.
+El cliente inyecta `traceparent` en la peticion al backend y .NET continua la misma traza, por eso una sincronizacion aparece como un unico arbol de spans.
+
+Al span de la sincronizacion se le agregan los contadores del resultado, `sync.pending`, `sync.sent` y `sync.failed`: la traza dice que paso, no solo cuanto tardo.
+El healthcheck se excluye en los dos servicios; se ejecuta cada pocos segundos y ocultaria el trafico real.
+
+La telemetria es opcional. Si falta `OTEL_EXPORTER_OTLP_ENDPOINT`, .NET no registra exportador y en Node el tracer del API queda como no-op, sin costo ni dependencia de un recolector.
+El dashboard guarda en memoria y no persiste: sirve para diagnosticar en desarrollo, no como almacen de telemetria.
 
 ## Despliegue
 

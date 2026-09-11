@@ -11,12 +11,30 @@ using RequestHub.Application.Requests.Queries.GetRequest;
 using RequestHub.Infrastructure;
 using RequestHub.Infrastructure.Persistence;
 using Serilog;
+using Serilog.Events;
+using Serilog.Sinks.OpenTelemetry;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, config) =>
-    config.ReadFrom.Configuration(context.Configuration)
-          .WriteTo.Console());
+{
+    config.ReadFrom.Configuration(context.Configuration).WriteTo.Console();
+
+    // The same logs reach the dashboard, correlated with the trace that produced them.
+    if (context.Configuration.OtlpEndpoint() is { } endpoint)
+    {
+        config.WriteTo.OpenTelemetry(options =>
+        {
+            options.Endpoint = endpoint;
+            options.Protocol = OtlpProtocol.Grpc;
+            options.ResourceAttributes = new Dictionary<string, object>
+            {
+                ["service.name"] = TelemetrySetup.ServiceName,
+                ["service.version"] = TelemetrySetup.ServiceVersion
+            };
+        });
+    }
+});
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -27,6 +45,7 @@ builder.Services.Configure<JsonOptions>(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddApiRateLimiting(builder.Configuration);
+builder.Services.AddApiTelemetry(builder.Configuration);
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>("database");
@@ -49,7 +68,15 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(options =>
+{
+    // The container probes /health every few seconds; at Verbose it stays below the minimum level.
+    options.GetLevel = (context, _, exception) => exception is not null
+        ? LogEventLevel.Error
+        : context.Request.Path.StartsWithSegments("/health")
+            ? LogEventLevel.Verbose
+            : LogEventLevel.Information;
+});
 
 app.MapPost("/requests/sync", async (
     IReadOnlyList<RegisterRequestDto> requests,

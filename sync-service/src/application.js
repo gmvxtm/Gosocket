@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ApplicationError } from './errors.js';
 import { countRequestsInGroup, requestIdsInGroup } from './groups.js';
+import { withSpan } from './telemetry.js';
 
 const maxPayloadLength = 64 * 1024;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -23,6 +24,7 @@ export function createApplication({ repository, processors, backend, newId = ran
   async function synchronize(onlyIds = null) {
     if (synchronizing) throw new ApplicationError('Synchronization already in progress', 409);
     synchronizing = true;
+    return withSpan('synchronize', { 'sync.scope': onlyIds ? 'group' : 'all' }, async span => {
     try {
       const pending = await repository.listPendingRequests(onlyIds);
       const processed = [];
@@ -47,10 +49,16 @@ export function createApplication({ repository, processors, backend, newId = ran
         await repository.markProcessed(acks.map(ack => ack.id));
         acknowledgements.push(...acks);
       }
+      span.setAttributes({
+        'sync.pending': pending.length,
+        'sync.sent': acknowledgements.length,
+        'sync.failed': failed.length
+      });
       return { sent: acknowledgements.length, failed, acknowledgements };
     } finally {
       synchronizing = false;
     }
+    });
   }
 
   return {

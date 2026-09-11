@@ -184,12 +184,42 @@ Dos limites independientes protegen la API. Se configuran en la seccion `RateLim
 
 El rechazo es `429` con ProblemDetails y cabecera `Retry-After`. El healthcheck queda exento, para que el monitoreo no consuma la ventana del llamante.
 
+## Observabilidad
+
+Los tres servicios de aplicacion exportan telemetria por OTLP al dashboard de Aspire, que ya viene en el `docker compose`:
+
+```text
+http://localhost:18888
+```
+
+No pide usuario ni contrasena y guarda todo en memoria: reiniciar el contenedor limpia la telemetria.
+
+| Pestana | Que responde |
+| --- | --- |
+| Traces | Cuanto tardo cada operacion y donde. Una sincronizacion se ve como una sola traza que cruza los dos servicios: `POST /sync` en Node, `synchronize`, la llamada al backend, `POST /requests/sync` en .NET y las consultas de PostgreSQL. |
+| Structured logs | Los logs de Serilog con su `traceId`. Desde un error se salta a la traza que lo produjo, y al reves. |
+| Metrics | Duracion y volumen por endpoint, metricas del runtime y del rate limiter (`aspnetcore.rate_limiting.*`, con la politica `synchronization`). |
+
+El `traceId` que devuelve un ProblemDetails es el mismo que se busca en el dashboard.
+
+Se activa con la variable estandar `OTEL_EXPORTER_OTLP_ENDPOINT`, que el `docker compose` ya define. Sin esa variable los servicios arrancan sin exportador, por lo que las pruebas y un `dotnet run` o `npm start` sueltos no necesitan dashboard.
+
+```text
+OTEL_EXPORTER_OTLP_ENDPOINT=http://dashboard:18889   # .NET, OTLP sobre gRPC
+OTEL_EXPORTER_OTLP_ENDPOINT=http://dashboard:18890   # Node, OTLP sobre HTTP
+```
+
 ## Capturas
 
 Salen de la suite E2E ejecutada contra el stack desplegado en Docker:
 
 - Crear, sincronizar y consultar el detalle confirmado: [escritorio](docs/screenshots/requests-desktop.png), [movil](docs/screenshots/requests-mobile.png).
 - Grupos anidados con su total y sincronizacion del grupo completo: [escritorio](docs/screenshots/groups-desktop.png), [movil](docs/screenshots/groups-mobile.png).
+
+Del dashboard de telemetria, sobre el mismo despliegue:
+
+- [Lista de trazas](docs/screenshots/telemetry-traces.png) y [detalle de una sincronizacion](docs/screenshots/telemetry-trace-detail.png), con sus seis spans repartidos entre los dos servicios.
+- [Logs estructurados](docs/screenshots/telemetry-logs.png) enlazados a su traza y [metricas del rate limiter](docs/screenshots/telemetry-metrics.png).
 
 ## Validacion
 

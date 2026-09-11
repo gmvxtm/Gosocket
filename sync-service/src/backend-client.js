@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { ApplicationError } from './errors.js';
+import { outgoingHeaders, withSpan } from './telemetry.js';
 
 export function createBackendClient({ baseUrl, fetchImpl = fetch, wait = delay, timeoutMs = 5000, attempts = 3 }) {
   return {
@@ -7,12 +8,18 @@ export function createBackendClient({ baseUrl, fetchImpl = fetch, wait = delay, 
       for (let attempt = 0; attempt < attempts; attempt++) {
         let transient = true;
         try {
-          const response = await fetchImpl(`${baseUrl}/requests/sync`, {
+          const response = await withSpan('POST /requests/sync', {
+            'http.request.method': 'POST',
+            'url.full': `${baseUrl}/requests/sync`,
+            'http.request.resend_count': attempt,
+            'sync.batch_size': requests.length
+          }, () => fetchImpl(`${baseUrl}/requests/sync`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            // traceparent travels here, so the central API continues this same trace.
+            headers: outgoingHeaders({ 'content-type': 'application/json' }),
             body: JSON.stringify(requests),
             signal: AbortSignal.timeout(timeoutMs)
-          });
+          }));
           transient = response.status === 408 || response.status === 429 || response.status >= 500;
           if (!response.ok) throw new Error(`Backend sync failed: HTTP ${response.status}`);
 
