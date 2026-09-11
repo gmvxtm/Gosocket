@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FolderPlus, Layers, Send } from 'lucide-react';
 import type { CreateGroupInput, GroupItem, LocalGroup, LocalRequest } from '../api';
 
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function GroupPanel({ groups, requests, totals, loading, creating, syncingId, onCreate, onSynchronize }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [items, setItems] = useState<GroupItem[]>([]);
   const [error, setError] = useState('');
@@ -31,30 +33,31 @@ export function GroupPanel({ groups, requests, totals, loading, creating, syncin
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (creating) return;
-    if (!name.trim()) { setError('Name is required.'); return; }
-    if (items.length === 0) { setError('Select at least one request or group.'); return; }
+    if (!name.trim()) { setError(t('groups.nameRequired')); return; }
+    if (items.length === 0) { setError(t('groups.membersRequired')); return; }
     setError('');
     try {
       await onCreate({ name: name.trim(), items });
       setName('');
       setItems([]);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not create group.');
+      setError(reason instanceof Error ? reason.message : String(reason));
     }
   }
 
   return (
     <section className="panel group-panel">
-      <h2><Layers size={18} /> Groups</h2>
+      <h2><Layers size={18} /> {t('groups.title')}</h2>
 
       <div className="group-grid">
       <form className="group-form" onSubmit={submit}>
         <fieldset disabled={creating}>
-          <label>Group name
-            <input maxLength={200} value={name} onChange={event => setName(event.target.value)} placeholder="North batch" />
+          <label>{t('groups.name')}
+            <input maxLength={200} value={name} placeholder={t('groups.namePlaceholder')}
+              onChange={event => setName(event.target.value)} />
           </label>
 
-          <p className="picker-title">Requests</p>
+          <p className="picker-title">{t('groups.requests')}</p>
           <div className="picker">
             {requests.map(request => (
               <label key={request.id} className="check">
@@ -62,23 +65,23 @@ export function GroupPanel({ groups, requests, totals, loading, creating, syncin
                 <span>{request.name}<small>{request.type}</small></span>
               </label>
             ))}
-            {requests.length === 0 && <p className="empty">No requests yet.</p>}
+            {requests.length === 0 && <p className="empty">{t('list.empty')}</p>}
           </div>
 
           {/* A group can nest other groups, so existing ones are selectable too. */}
-          <p className="picker-title">Nested groups</p>
+          <p className="picker-title">{t('groups.nested')}</p>
           <div className="picker">
             {groups.map(group => (
               <label key={group.id} className="check">
                 <input type="checkbox" checked={isChecked('group', group.id)} onChange={() => toggle('group', group.id)} />
-                <span>{group.name}<small>{group.items.length} items</small></span>
+                <span>{group.name}<small>{t('groups.items', { count: group.items.length })}</small></span>
               </label>
             ))}
-            {groups.length === 0 && <p className="empty">No groups yet.</p>}
+            {groups.length === 0 && <p className="empty">{t('groups.empty')}</p>}
           </div>
 
           <button className="primary full" type="submit">
-            <FolderPlus size={18} />{creating ? 'Creating...' : 'Create group'}
+            <FolderPlus size={18} />{creating ? t('actions.creating') : t('groups.create')}
           </button>
         </fieldset>
         {error && <p role="alert" className="error-message">{error}</p>}
@@ -91,16 +94,16 @@ export function GroupPanel({ groups, requests, totals, loading, creating, syncin
             <article key={group.id} className="group-row">
               <div>
                 <strong>{group.name}</strong>
-                <small>{total === undefined ? 'Counting...' : total + ' request(s) in total'}</small>
+                <small>{total === undefined ? '...' : t('groups.total', { count: total })}</small>
               </div>
               <button type="button" disabled={syncingId === group.id} onClick={() => onSynchronize(group.id)}
-                aria-label={'Sync group ' + group.name}>
-                <Send size={16} />{syncingId === group.id ? 'Sending...' : 'Sync group'}
+                aria-label={t('groups.sync') + ' ' + group.name}>
+                <Send size={16} />{syncingId === group.id ? t('actions.syncing') : t('groups.sync')}
               </button>
             </article>
           );
         })}
-        {groups.length === 0 && <p className="empty">{loading ? 'Loading groups...' : 'No groups yet.'}</p>}
+        {groups.length === 0 && <p className="empty">{t('groups.empty')}</p>}
       </div>
       </div>
     </section>

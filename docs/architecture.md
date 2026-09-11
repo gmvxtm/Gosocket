@@ -42,8 +42,11 @@ La copia local conserva el payload original, para que un reenvio no aplique la t
 | Factory / composition root | server.js ensambla repositorio, registro, cliente y aplicacion | Centraliza dependencias y ciclo de vida, con HTTP separado |
 | Adapter | http.js y backend-client.js | Traduce HTTP a casos de uso y a confirmaciones del backend |
 | Retry con backoff y timeout | createBackendClient | Tolera errores transitorios sin cambiar el Id de las solicitudes |
+| JWT + BCrypt | LoginCommand, JwtTokenService, BCryptPasswordHasher y verificacion local en Node | Protege endpoints privados sin perder operacion local mientras el token siga vigente |
+| React Context para sesion | web/src/session/SessionContext.tsx y RequireAuth | Centraliza login/logout y redirecciona ante 401 |
+| Redux Toolkit para preferencias | web/src/store/preferences.ts | Persiste idioma y tema sin mezclarlos con datos del servidor |
 | Custom hooks y composicion | web/src/hooks/useRequests.ts y components/ | Mantiene los componentes declarativos y separa operaciones remotas |
-| Server state separado del estado UI | React Query frente a useState | Gestiona cache e invalidacion sin mezclar formularios y seleccion |
+| Server state separado del estado UI | React Query, Context, Redux y useState | Gestiona cache, sesion, preferencias y estado efimero con herramientas distintas |
 
 Application en .NET usa el contrato IAppDbContext, que expone tipos de EF Core. Es la frontera de persistencia elegida; no se presenta como una capa completamente independiente del ORM.
 Los componentes React usan contratos TypeScript estrictos. Esos tipos no reemplazan la validacion HTTP en ejecucion.
@@ -84,7 +87,8 @@ Se rechazan referencias inexistentes y tipos de item desconocidos; un grupo vaci
 ## Frontend y modo offline
 
 React Query controla listados, tipos, healthcheck y mutaciones. Los hooks invalidan la cache al crear y al terminar una sincronizacion.
-useState conserva exclusivamente el formulario y la seleccion. No se usa Redux porque actualmente no hay preferencias globales que lo justifiquen, ni Context de autenticacion porque no hay sesion.
+La sesion vive en React Context: el token queda en memoria del cliente API, se persiste en localStorage mientras no expire y un 401 limpia la cache y devuelve al login.
+Redux Toolkit guarda preferencias compartidas de idioma y tema, persistidas en localStorage. useState queda para formularios, filtros y seleccion temporal.
 
 networkMode: always permite intentar consultar localhost aunque el navegador marque Internet como desconectado.
 Esto no crea una cache durable del navegador: para trabajar sin Internet deben estar disponibles el frontend servido localmente, Node.js y PostgreSQL local.
@@ -94,8 +98,8 @@ La sincronizacion es manual. El indicador del servicio local comprueba PostgreSQ
 
 - Se conserva HTTP nativo de Node: el adaptador es pequeno y no requiere migrar a Express o Nest.
 - EF Core con AsNoTracking es suficiente para consultar por Id; no se incorpora Dapper sin una consulta que lo necesite.
-- No se agregan Kafka, Saga, Circuit Breaker, JWT ni un contenedor de DI a Node solo para aumentar la lista de patrones.
-- No hay autenticacion ni endurecimiento para exposicion publica. CORS y credenciales son de desarrollo, y los puertos de los tres servicios se publican solo en loopback.
+- No se agregan Kafka, Saga, Circuit Breaker ni un contenedor de DI a Node solo para aumentar la lista de patrones.
+- La autenticacion es de demostracion: usuario seed, clave y firma JWT de desarrollo. No se presenta como endurecimiento para exposicion publica. CORS y credenciales son de desarrollo, y los puertos de los tres servicios se publican solo en loopback.
 - No se agregan migraciones: este cambio conserva el esquema existente.
 - Los listados y la construccion del arbol cargan los registros en memoria. Paginacion, limites de profundidad y coordinacion multiproceso quedan como mejoras para mayor volumen.
 

@@ -4,7 +4,7 @@ Aplicacion fullstack offline-first para crear solicitudes localmente, procesarla
 
 ## Servicios
 
-- `web/`: frontend React + TypeScript, con React Query y componentes separados.
+- `web/`: frontend React + TypeScript, con login, React Query, React Router, i18n, preferencias en Redux y componentes separados.
 - `sync-service/`: servicio Node.js independiente. Persiste solicitudes en PostgreSQL local y sincroniza pendientes.
 - `backend/`: API .NET 10. Registra solicitudes procesadas en PostgreSQL central.
 - `docker-compose.yml`: despliega los tres servicios y las bases `requests_local` y `requests_central`.
@@ -66,8 +66,9 @@ URLs:
 - Sync-service: `http://localhost:3001`
 - Backend: `http://localhost:5080`
 - PostgreSQL local: `localhost:5432`; central: `localhost:5433`
+- Usuario demo: `admin` / `Admin.12345`
 
-Los tres servicios de aplicacion publican solo en `127.0.0.1`, porque no incluyen autenticacion.
+Los tres servicios de aplicacion publican solo en `127.0.0.1`. La solucion incluye login demo y JWT, pero las credenciales y claves son de desarrollo.
 
 Estado y detencion:
 
@@ -124,7 +125,7 @@ El modo offline requiere que el frontend, Node.js y PostgreSQL local esten dispo
 
 ## Patrones y decisiones
 
-El backend usa Clean Architecture, CQRS con MediatR, validacion por pipeline y EF Core como Unit of Work. Node separa transporte, casos de uso y persistencia mediante dependencias inyectadas; utiliza Strategy para procesadores y Composite para grupos. React separa datos remotos (React Query) y estado local de UI (useState).
+El backend usa Clean Architecture, CQRS con MediatR, validacion por pipeline, JWT, rate limiting y EF Core como Unit of Work. Node separa transporte, casos de uso y persistencia mediante dependencias inyectadas; utiliza Strategy para procesadores y Composite para grupos. React separa datos remotos (React Query), sesion (Context), preferencias compartidas (Redux) y estado local de UI (useState).
 
 Ver [arquitectura, patrones y limites](docs/architecture.md) para el flujo, ubicacion de cada patron, garantias de entrega y decisiones de alcance.
 

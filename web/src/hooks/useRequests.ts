@@ -30,7 +30,9 @@ export function useCreateRequest() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: requestsApi.create,
-    onSuccess: () => client.invalidateQueries({ queryKey: localKeys.requests })
+    // Returning the promise would hold the mutation open until the list refetches, and the
+    // screen would wait on a refresh it does not need to show the request it just created.
+    onSuccess: () => { void client.invalidateQueries({ queryKey: localKeys.requests }); }
   });
 }
 
