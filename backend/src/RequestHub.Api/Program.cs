@@ -26,6 +26,7 @@ builder.Services.Configure<JsonOptions>(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddApiRateLimiting(builder.Configuration);
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>("database");
@@ -35,6 +36,7 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseRateLimiter();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -59,7 +61,8 @@ app.MapPost("/requests/sync", async (
     return Results.Ok(result);
 })
 .WithName("SyncRequests")
-.WithSummary("Registers processed requests coming from the offline sync service.");
+.WithSummary("Registers processed requests coming from the offline sync service.")
+.RequireRateLimiting(RateLimitingSetup.SynchronizationPolicy);
 
 app.MapGet("/requests/{id:guid}", async (Guid id, ISender sender, CancellationToken cancellationToken) =>
 {
@@ -87,6 +90,6 @@ app.MapHealthChecks("/health", new HealthCheckOptions
         });
         await context.Response.WriteAsync(payload);
     }
-});
+}).DisableRateLimiting();
 
 await app.RunAsync();

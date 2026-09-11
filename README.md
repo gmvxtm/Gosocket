@@ -166,6 +166,24 @@ El backend usa Clean Architecture:
 
 La sincronizacion es idempotente: si el mismo `Id` llega mas de una vez, el backend devuelve confirmacion sin insertar duplicados.
 
+### Errores
+
+Todas las respuestas de error usan ProblemDetails y llevan `traceId`. Las produce un unico manejador, `GlobalExceptionHandler`:
+las validaciones de FluentValidation salen como 400 con el detalle por campo, y un fallo inesperado sale como 500 sin exponer el mensaje interno, que queda en el log.
+
+### Limites
+
+Dos limites independientes protegen la API. Se configuran en la seccion `RateLimiting` de `appsettings.json`:
+
+| Ajuste | Valor | Efecto |
+| --- | --- | --- |
+| `PermitsPerMinute` | 120 | Ventana fija por llamante. Identifica por usuario autenticado y, si no lo hay, por IP. |
+| `QueueLimit` | 0 | Sin espera: al agotar la ventana responde de inmediato. |
+| `MaxConcurrentSynchronizations` | 4 | Bulkhead: sincronizaciones simultaneas contra la base. |
+| `SynchronizationQueueLimit` | 8 | Sincronizaciones en espera antes de rechazar. |
+
+El rechazo es `429` con ProblemDetails y cabecera `Retry-After`. El healthcheck queda exento, para que el monitoreo no consuma la ventana del llamante.
+
 ## Capturas
 
 Salen de la suite E2E ejecutada contra el stack desplegado en Docker:

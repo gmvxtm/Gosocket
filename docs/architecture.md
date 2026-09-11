@@ -31,6 +31,9 @@ La copia local conserva el payload original, para que un reenvio no aplique la t
 | CQRS + Mediator | RegisterRequestsCommand y GetRequestQuery con MediatR | Distingue registro de consulta central sin duplicar bases |
 | Unit of Work | AppDbContext.SaveChangesAsync | Confirma el lote de entidades nuevas en una operacion de persistencia |
 | Pipeline behavior | ValidationBehavior con FluentValidation | Valida los comandos antes del handler |
+| Manejador global de errores | GlobalExceptionHandler, IExceptionHandler de ASP.NET | Un unico contrato de error, con ProblemDetails y traceId |
+| Rate limiting | Ventana fija por llamante, RateLimitingSetup | Impide que un cliente agote la capacidad de la API |
+| Bulkhead | ConcurrencyLimiter sobre /requests/sync | Aisla la sincronizacion pesada del resto de endpoints |
 | Dependency Inversion / DI | IAppDbContext; dependencias inyectadas en createApplication | Permite probar casos de uso sin servidor HTTP ni una base real |
 | Repository | createPostgresRepository(pool), sync-service/src/db.js | Encapsula SQL parametrizado y mapeo de filas |
 | Strategy | ProcessorRegistry, sync-service/src/processors.js | Selecciona la transformacion por type; acepta estrategias nuevas por constructor |
@@ -94,6 +97,15 @@ La sincronizacion es manual. El indicador del servicio local comprueba PostgreSQ
 - No hay autenticacion ni endurecimiento para exposicion publica. CORS y credenciales son de desarrollo, y los puertos de los tres servicios se publican solo en loopback.
 - No se agregan migraciones: este cambio conserva el esquema existente.
 - Los listados y la construccion del arbol cargan los registros en memoria. Paginacion, limites de profundidad y coordinacion multiproceso quedan como mejoras para mayor volumen.
+
+## Errores y limites
+
+El manejador traduce cada excepcion a ProblemDetails: ValidationException a 400 con el detalle por campo, NotFoundException a 404, cancelacion del cliente a 499 y cualquier otra a 500 sin el mensaje interno.
+Siempre agrega `traceId` con el identificador de la actividad, que es el mismo que se exporta por OpenTelemetry: con ese valor se ubica la peticion en el dashboard.
+
+El limite por ventana y el bulkhead resuelven problemas distintos. La ventana protege de un cliente que llama demasiado seguido; el bulkhead protege la base de datos, porque cada sincronizacion escribe un lote de hasta 500 filas.
+Sin bulkhead, varias sincronizaciones grandes en paralelo consumirian el pool de conexiones y dejarian sin respuesta a las consultas y al healthcheck.
+El rechazo es inmediato y explicito, con `Retry-After`; el sync-service ya reintenta 429 con backoff, asi que el lote no se pierde.
 
 ## Despliegue
 
