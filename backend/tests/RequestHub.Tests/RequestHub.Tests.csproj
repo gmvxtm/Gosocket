@@ -21,7 +21,13 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- The exception handler lives in the Api layer, which targets ASP.NET Core. -->
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RequestHub.Api\RequestHub.Api.csproj" />
     <ProjectReference Include="..\..\src\RequestHub.Application\RequestHub.Application.csproj" />
     <ProjectReference Include="..\..\src\RequestHub.Domain\RequestHub.Domain.csproj" />
     <ProjectReference Include="..\..\src\RequestHub.Infrastructure\RequestHub.Infrastructure.csproj" />

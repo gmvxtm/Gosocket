@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Json;
 using MediatR;
+using RequestHub.Api.Common;
 using RequestHub.Application;
 using RequestHub.Application.Requests.Commands.RegisterRequests;
 using RequestHub.Application.Requests.Dtos;
@@ -24,12 +24,17 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.Configure<JsonOptions>(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>("database");
 
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -49,21 +54,9 @@ app.MapPost("/requests/sync", async (
     ISender sender,
     CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var result = await sender.Send(new RegisterRequestsCommand(requests), cancellationToken);
-        return Results.Ok(result);
-    }
-    catch (ValidationException ex)
-    {
-        var errors = ex.Errors
-            .GroupBy(error => error.PropertyName)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Select(error => error.ErrorMessage).ToArray());
-
-        return Results.ValidationProblem(errors);
-    }
+    // FluentValidation failures travel as exceptions up to GlobalExceptionHandler.
+    var result = await sender.Send(new RegisterRequestsCommand(requests), cancellationToken);
+    return Results.Ok(result);
 })
 .WithName("SyncRequests")
 .WithSummary("Registers processed requests coming from the offline sync service.");
