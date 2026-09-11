@@ -48,10 +48,18 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResultDto>
         if (user is null || user.RecordStatus != "A" || !_hasher.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedException("Invalid username or password.");
 
-        user.LastLoginAt = _clock.GetUtcNow().UtcDateTime;
-        await _db.SaveChangesAsync(cancellationToken);
-
         var (token, expiresAt) = _tokens.Issue(user);
+
+        user.LastLoginAt = _clock.GetUtcNow().UtcDateTime;
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The login stamp is audit data; concurrent valid logins must not reject the session.
+        }
+
         return new AuthResultDto
         {
             Token = token,

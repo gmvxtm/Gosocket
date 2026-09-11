@@ -21,6 +21,19 @@ public class LoginCommandHandlerTests
 
     private readonly BCryptPasswordHasher _hasher = new();
 
+    private sealed class LoginStampConflictDbContext(DbContextOptions<AppDbContext> options) : AppDbContext(options)
+    {
+        public bool ThrowOnNextSave { get; set; }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (!ThrowOnNextSave) return base.SaveChangesAsync(cancellationToken);
+
+            ThrowOnNextSave = false;
+            throw new DbUpdateConcurrencyException("The login stamp was updated by another session.");
+        }
+    }
+
     private AppDbContext NewDbWith(User user)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -60,6 +73,23 @@ public class LoginCommandHandlerTests
         result.DisplayName.Should().Be("Gino Maguina");
         result.ExpiresAt.Should().Be(Now.AddMinutes(new JwtOptions().ExpiresMinutes));
         db.Users.Single().LastLoginAt.Should().Be(Now);
+    }
+
+    [Fact]
+    public async Task Valid_credentials_still_return_a_token_when_the_login_stamp_conflicts()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        using var db = new LoginStampConflictDbContext(options);
+        db.Users.Add(NewUser());
+        db.SaveChanges();
+        db.ThrowOnNextSave = true;
+
+        var result = await NewHandler(db).Handle(new LoginCommand("gino", Password), CancellationToken.None);
+
+        result.Token.Should().NotBeNullOrWhiteSpace();
+        result.Username.Should().Be("gino");
     }
 
     [Fact]
