@@ -75,7 +75,7 @@ services:
     build:
       context: ./web
       args:
-        # El navegador corre en el host, por eso apunta al puerto publicado del sync-service.
+        # The browser runs on the host, so it points at the published sync-service port.
         VITE_SYNC_SERVICE_URL: http://localhost:3001
     container_name: offline-requests-web
     ports:
