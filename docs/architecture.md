@@ -114,7 +114,7 @@ El sync-service escucha en loopback por defecto y la imagen lo abre a `0.0.0.0` 
 - Node: extensibilidad de Strategy, Composite, ciclos y referencias, grupos vacios, lotes, confirmaciones parciales, fallos y recuperacion, timeout y errores HTTP.
 - PostgreSQL + API real: persistencia entre conexiones y recuperacion tras perder la confirmacion.
 - React: consultas y creacion con onlineManager offline, invalidacion, errores y preservacion del formulario.
-- Playwright: crear, sincronizar, leer el registro central y recargar en escritorio y movil, contra el despliegue en contenedores.
+- Playwright: crear, sincronizar, leer el registro central y recargar en escritorio y movil, contra el despliegue en contenedores. Las capturas resultantes estan en docs/screenshots.
 
 Las pruebas EF InMemory no verifican restricciones ni carreras de PostgreSQL.
 La prueba de reconexion usa un cliente central que simula una interrupcion; no desconecta fisicamente Internet.

@@ -166,6 +166,13 @@ El backend usa Clean Architecture:
 
 La sincronizacion es idempotente: si el mismo `Id` llega mas de una vez, el backend devuelve confirmacion sin insertar duplicados.
 
+## Capturas
+
+Salen de la suite E2E ejecutada contra el stack desplegado en Docker:
+
+- Crear, sincronizar y consultar el detalle confirmado: [escritorio](docs/screenshots/requests-desktop.png), [movil](docs/screenshots/requests-mobile.png).
+- Grupos anidados con su total y sincronizacion del grupo completo: [escritorio](docs/screenshots/groups-desktop.png), [movil](docs/screenshots/groups-mobile.png).
+
 ## Validacion
 
 Backend:
@@ -214,4 +221,8 @@ npm.cmd run test:e2e
 
 Sin `E2E_WEB_URL` apuntan al servidor de desarrollo en `http://localhost:5173`. Con `$env:PLAYWRIGHT_BROWSER_CHANNEL='chrome'` se usa el Chrome instalado en lugar de descargar Chromium.
 
-Cada prueba corre en escritorio y movil y genera capturas en `web/test-results/` (ignorado por Git).
+Cada prueba corre en escritorio y movil y adjunta una captura. El reporte queda en `web/playwright-report/index.html`, junto con las capturas, los videos y las trazas de los casos que fallen:
+
+```powershell
+npx playwright show-report
+```

@@ -22,5 +22,7 @@ test('creates locally, synchronizes and displays the confirmed request', async (
   await expect(page.getByRole('button', { name: new RegExp(name) })).toContainText('Processed');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(errors).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('requests.png'), fullPage: true });
+  const screenshot = testInfo.outputPath('requests.png');
+  await page.screenshot({ path: screenshot, fullPage: true });
+  await testInfo.attach('requests', { path: screenshot, contentType: 'image/png' });
 });

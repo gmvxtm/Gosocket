@@ -68,7 +68,9 @@ test('groups nest, report their total and synchronize as a unit', async ({ page,
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(errors).toEqual([]);
-  await page.screenshot({ path: testInfo.outputPath('groups.png'), fullPage: true });
+  const screenshot = testInfo.outputPath('groups.png');
+  await page.screenshot({ path: screenshot, fullPage: true });
+  await testInfo.attach('groups', { path: screenshot, contentType: 'image/png' });
 });
 
 test('rejects a group without a name or without members', async ({ page }) => {
