@@ -5,11 +5,16 @@ using Microsoft.AspNetCore.Http.Json;
 using MediatR;
 using RequestHub.Api.Common;
 using RequestHub.Application;
+using RequestHub.Application.Auth.Commands.Login;
+using RequestHub.Application.Auth.Dtos;
 using RequestHub.Application.Requests.Commands.RegisterRequests;
 using RequestHub.Application.Requests.Dtos;
 using RequestHub.Application.Requests.Queries.GetRequest;
+using Microsoft.Extensions.Options;
+using RequestHub.Application.Common.Interfaces;
 using RequestHub.Infrastructure;
 using RequestHub.Infrastructure.Persistence;
+using RequestHub.Infrastructure.Security;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.OpenTelemetry;
@@ -44,6 +49,7 @@ builder.Services.Configure<JsonOptions>(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddApiAuthentication(builder.Configuration);
 builder.Services.AddApiRateLimiting(builder.Configuration);
 builder.Services.AddApiTelemetry(builder.Configuration);
 
@@ -55,12 +61,19 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+// After authentication: an identified caller gets its own window instead of sharing the one for its IP.
 app.UseRateLimiter();
 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await DbInitializer.InitializeAsync(db);
+    var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+    var seed = scope.ServiceProvider.GetRequiredService<IOptions<SeedOptions>>().Value;
+    await DbInitializer.InitializeAsync(db, hasher, seed);
 }
 
 if (app.Environment.IsDevelopment())
@@ -78,6 +91,18 @@ app.UseSerilogRequestLogging(options =>
             : LogEventLevel.Information;
 });
 
+app.MapPost("/auth/login", async (
+    LoginDto credentials,
+    ISender sender,
+    CancellationToken cancellationToken) =>
+{
+    var result = await sender.Send(new LoginCommand(credentials.Username, credentials.Password), cancellationToken);
+    return Results.Ok(result);
+})
+.WithName("Login")
+.WithSummary("Exchanges a username and password for an access token.")
+.AllowAnonymous();
+
 app.MapPost("/requests/sync", async (
     IReadOnlyList<RegisterRequestDto> requests,
     ISender sender,
@@ -89,7 +114,8 @@ app.MapPost("/requests/sync", async (
 })
 .WithName("SyncRequests")
 .WithSummary("Registers processed requests coming from the offline sync service.")
-.RequireRateLimiting(RateLimitingSetup.SynchronizationPolicy);
+.RequireRateLimiting(RateLimitingSetup.SynchronizationPolicy)
+.RequireAuthorization();
 
 app.MapGet("/requests/{id:guid}", async (Guid id, ISender sender, CancellationToken cancellationToken) =>
 {
@@ -97,7 +123,8 @@ app.MapGet("/requests/{id:guid}", async (Guid id, ISender sender, CancellationTo
     return request is null ? Results.NotFound() : Results.Ok(request);
 })
 .WithName("GetRegisteredRequest")
-.WithSummary("Returns a centrally registered request for synchronization verification.");
+.WithSummary("Returns a centrally registered request for synchronization verification.")
+.RequireAuthorization();
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {

@@ -21,7 +21,7 @@ function requireName(value) {
 export function createApplication({ repository, processors, backend, newId = randomUUID, now = () => new Date() }) {
   let synchronizing = false;
 
-  async function synchronize(onlyIds = null) {
+  async function synchronize(onlyIds = null, token = null) {
     if (synchronizing) throw new ApplicationError('Synchronization already in progress', 409);
     synchronizing = true;
     return withSpan('synchronize', { 'sync.scope': onlyIds ? 'group' : 'all' }, async span => {
@@ -45,7 +45,7 @@ export function createApplication({ repository, processors, backend, newId = ran
       await repository.markFailed(failed);
       const acknowledgements = [];
       for (let offset = 0; offset < processed.length; offset += 500) {
-        const acks = await backend.register(processed.slice(offset, offset + 500));
+        const acks = await backend.register(processed.slice(offset, offset + 500), token);
         await repository.markProcessed(acks.map(ack => ack.id));
         acknowledgements.push(...acks);
       }
@@ -96,8 +96,14 @@ export function createApplication({ repository, processors, backend, newId = ran
       return { total: countRequestsInGroup(await repository.readGroupStore(), requireId(id)) };
     },
     synchronize,
-    async synchronizeGroup(id) {
-      return synchronize(requestIdsInGroup(await repository.readGroupStore(), requireId(id)));
+    login(credentials) {
+      const username = typeof credentials?.username === 'string' ? credentials.username.trim() : '';
+      const password = typeof credentials?.password === 'string' ? credentials.password : '';
+      if (!username || !password) throw new ApplicationError('username and password are required');
+      return backend.login({ username, password });
+    },
+    async synchronizeGroup(id, token = null) {
+      return synchronize(requestIdsInGroup(await repository.readGroupStore(), requireId(id)), token);
     }
   };
 }

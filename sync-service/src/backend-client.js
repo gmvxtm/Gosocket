@@ -4,7 +4,25 @@ import { outgoingHeaders, withSpan } from './telemetry.js';
 
 export function createBackendClient({ baseUrl, fetchImpl = fetch, wait = delay, timeoutMs = 5000, attempts = 3 }) {
   return {
-    async register(requests) {
+    async login(credentials) {
+      let response;
+      try {
+        response = await withSpan('POST /auth/login', { 'url.full': `${baseUrl}/auth/login` }, () =>
+          fetchImpl(`${baseUrl}/auth/login`, {
+            method: 'POST',
+            headers: outgoingHeaders({ 'content-type': 'application/json' }),
+            body: JSON.stringify(credentials),
+            signal: AbortSignal.timeout(timeoutMs)
+          }));
+      } catch {
+        throw new ApplicationError('The central service is unavailable, sign in again when it is back', 502);
+      }
+      if (response.status === 401) throw new ApplicationError('Invalid username or password', 401);
+      if (!response.ok) throw new ApplicationError(`Login failed: HTTP ${response.status}`, 502);
+      return response.json();
+    },
+
+    async register(requests, token) {
       for (let attempt = 0; attempt < attempts; attempt++) {
         let transient = true;
         try {
@@ -16,7 +34,10 @@ export function createBackendClient({ baseUrl, fetchImpl = fetch, wait = delay, 
           }, () => fetchImpl(`${baseUrl}/requests/sync`, {
             method: 'POST',
             // traceparent travels here, so the central API continues this same trace.
-            headers: outgoingHeaders({ 'content-type': 'application/json' }),
+            headers: outgoingHeaders({
+              'content-type': 'application/json',
+              ...(token ? { authorization: `Bearer ${token}` } : {})
+            }),
             body: JSON.stringify(requests),
             signal: AbortSignal.timeout(timeoutMs)
           }));

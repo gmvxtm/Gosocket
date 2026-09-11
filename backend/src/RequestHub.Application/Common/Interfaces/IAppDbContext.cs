@@ -12,5 +12,7 @@ public interface IAppDbContext
 {
     DbSet<Request> Requests { get; }
 
+    DbSet<User> Users { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

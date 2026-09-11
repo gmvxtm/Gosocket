@@ -45,6 +45,11 @@ export async function withSpan(name, attributes, operation) {
   });
 }
 
+/** Records the caller on the current span, so a trace says who did what. */
+export function setSpanUser(username) {
+  trace.getActiveSpan()?.setAttribute('enduser.id', username);
+}
+
 /** Continues the trace started upstream when the caller sends traceparent. */
 export function withIncomingContext(headers, operation) {
   return context.with(propagation.extract(context.active(), headers), operation);

@@ -13,6 +13,8 @@ public class AppDbContext : DbContext, IAppDbContext
 
     public DbSet<Request> Requests => Set<Request>();
 
+    public DbSet<User> Users => Set<User>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

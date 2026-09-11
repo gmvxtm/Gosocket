@@ -55,6 +55,14 @@ public class GlobalExceptionHandler : IExceptionHandler
             Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1"
         },
 
+        UnauthorizedException => new ProblemDetails
+        {
+            Status = StatusCodes.Status401Unauthorized,
+            Title = "Authentication failed.",
+            Detail = exception.Message,
+            Type = "https://tools.ietf.org/html/rfc9110#section-15.5.2"
+        },
+
         NotFoundException => new ProblemDetails
         {
             Status = StatusCodes.Status404NotFound,

@@ -1,13 +1,14 @@
 import { createServer } from 'node:http';
 import { ApplicationError } from './errors.js';
-import { withIncomingContext, withSpan } from './telemetry.js';
+import { bearerOf, verifyToken } from './auth.js';
+import { setSpanUser, withIncomingContext, withSpan } from './telemetry.js';
 
 function json(response, status, body) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET,POST,OPTIONS',
-    'access-control-allow-headers': 'content-type'
+    'access-control-allow-headers': 'content-type, authorization'
   });
   response.end(status === 204 ? undefined : JSON.stringify(body));
 }
@@ -34,7 +35,7 @@ function routeOf(method, pathname) {
   return method + ' ' + pathname.replace(/\/[0-9a-f-]{36}(?=\/|$)/gi, '/{id}');
 }
 
-export function createHttpServer({ application, backendUrl, logger = console }) {
+export function createHttpServer({ application, backendUrl, session, logger = console }) {
   async function dispatch(request, response, pathname) {
     try {
       if (request.method === 'OPTIONS') return json(response, 204);
@@ -47,10 +48,19 @@ export function createHttpServer({ application, backendUrl, logger = console }) 
           return json(response, 503, { status: 'Unhealthy', database: 'PostgreSQL' });
         }
       }
+      if (request.method === 'POST' && pathname === '/auth/login') return json(response, 200, await application.login(await readBody(request)));
+
+      // Everything below needs a session. The token is verified here, with no call to the
+      // central API, so the app keeps working while there is no connectivity.
+      const token = bearerOf(request.headers);
+      const user = verifyToken(token, session);
+      setSpanUser(user.username);
+
+      if (request.method === 'GET' && pathname === '/session') return json(response, 200, user);
       if (request.method === 'GET' && pathname === '/processors') return json(response, 200, application.listProcessors());
       if (request.method === 'GET' && pathname === '/requests') return json(response, 200, await application.listRequests());
       if (request.method === 'POST' && pathname === '/requests') return json(response, 201, await application.createRequest(await readBody(request)));
-      if (request.method === 'POST' && pathname === '/sync') return json(response, 200, await application.synchronize());
+      if (request.method === 'POST' && pathname === '/sync') return json(response, 200, await application.synchronize(null, token));
       if (request.method === 'GET' && pathname === '/groups') return json(response, 200, await application.listGroups());
       if (request.method === 'POST' && pathname === '/groups') return json(response, 201, await application.createGroup(await readBody(request)));
 
@@ -58,7 +68,7 @@ export function createHttpServer({ application, backendUrl, logger = console }) 
       if (request.method === 'GET' && requestMatch) return json(response, 200, await application.getRequest(requestMatch[1]));
       const groupMatch = pathname.match(/^\/groups\/([^/]+)\/(total|sync)$/);
       if (groupMatch?.[2] === 'total' && request.method === 'GET') return json(response, 200, await application.countGroup(groupMatch[1]));
-      if (groupMatch?.[2] === 'sync' && request.method === 'POST') return json(response, 200, await application.synchronizeGroup(groupMatch[1]));
+      if (groupMatch?.[2] === 'sync' && request.method === 'POST') return json(response, 200, await application.synchronizeGroup(groupMatch[1], token));
       return json(response, 404, { error: 'Not found' });
     } catch (error) {
       if (error instanceof ApplicationError) return json(response, error.statusCode, { error: error.message });

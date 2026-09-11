@@ -1,3 +1,7 @@
+# The central API signs the token and the sync service verifies it: both need the same key.
+# Development value; a real deployment injects it from the environment.
+x-jwt-key: &jwt-key "development-only-signing-key-change-me-please"
+
 services:
   postgres-local:
     image: postgres:18-alpine
@@ -49,6 +53,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: Host=postgres-central;Port=5432;Database=requests_central;Username=app;Password=app
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18889
+      Jwt__Key: *jwt-key
     ports:
       - "127.0.0.1:5080:8080"
     depends_on:
@@ -71,6 +76,7 @@ services:
       BACKEND_URL: http://backend:8080
       # The Node exporter speaks OTLP over HTTP; .NET uses the gRPC port of the same dashboard.
       OTEL_EXPORTER_OTLP_ENDPOINT: http://dashboard:18890
+      JWT_SECRET: *jwt-key
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:

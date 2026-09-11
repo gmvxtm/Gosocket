@@ -33,12 +33,17 @@ test('PostgreSQL preserves pending work across connections and recovers a lost a
     secondPool = new pg.Pool({ connectionString });
     const repository = createPostgresRepository(secondPool);
     assert.equal((await repository.getRequest(row.id)).payload, 'hello');
+    // The central API requires a session, so the test signs in the same way the service does.
     const client = createBackendClient({ baseUrl: backendUrl });
+    const { token } = await client.login({
+      username: process.env.SEED_USERNAME ?? 'admin',
+      password: process.env.SEED_PASSWORD ?? 'Admin.12345'
+    });
     let loseAcknowledgement = true;
     const online = createApplication({
       repository, processors: new ProcessorRegistry(),
       backend: { register: async batch => {
-        const result = await client.register(batch);
+        const result = await client.register(batch, token);
         if (loseAcknowledgement) { loseAcknowledgement = false; throw new Error('Acknowledgement lost'); }
         return result;
       } }
@@ -49,7 +54,9 @@ test('PostgreSQL preserves pending work across connections and recovers a lost a
     assert.equal(result.sent, 1);
     assert.equal(result.acknowledgements[0].alreadyRegistered, true);
     assert.equal((await repository.getRequest(row.id)).status, 'Processed');
-    const central = await fetch(backendUrl + '/requests/' + row.id);
+    const central = await fetch(backendUrl + '/requests/' + row.id, {
+      headers: { authorization: `Bearer ${token}` }
+    });
     assert.equal(central.status, 200);
     assert.equal((await central.json()).payload, 'HELLO');
   } finally {
