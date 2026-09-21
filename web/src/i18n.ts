@@ -31,6 +31,12 @@ const es = {
     offline: 'Servicio local sin conexion',
     checking: 'Verificando servicio...'
   },
+  storage: {
+    service: 'Cola en el equipo',
+    browser: 'Cola en el navegador',
+    serviceHint: 'Las solicitudes pendientes se guardan en el PostgreSQL del servicio local',
+    browserHint: 'Las solicitudes pendientes se guardan en IndexedDB, dentro de este navegador'
+  },
   actions: {
     refresh: 'Actualizar',
     sync: 'Sincronizar',
@@ -127,6 +133,12 @@ const en: typeof es = {
     online: 'Sync service online',
     offline: 'Sync service offline',
     checking: 'Checking service...'
+  },
+  storage: {
+    service: 'Queue on this machine',
+    browser: 'Queue in this browser',
+    serviceHint: 'Pending requests are kept in the PostgreSQL of the local service',
+    browserHint: 'Pending requests are kept in IndexedDB, inside this browser'
   },
   actions: {
     refresh: 'Refresh',

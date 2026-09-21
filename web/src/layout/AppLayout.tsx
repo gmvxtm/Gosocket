@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Languages, LayoutDashboard, Layers, List, LogOut, Moon, PlusCircle, RefreshCw, Sun, Wifi, WifiOff } from 'lucide-react';
+import { Database, HardDrive, Languages, LayoutDashboard, Layers, List, LogOut, Moon, PlusCircle, RefreshCw, Sun, Wifi, WifiOff } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { languageChanged, themeToggled } from '../store/preferences';
 import { useSession } from '../session/SessionContext';
 import { localKeys, useRequests, useServiceHealth } from '../hooks/useRequests';
+import { localStore } from '../local';
 import type { Language } from '../i18n';
 
 const tabs = [
@@ -49,6 +50,12 @@ export function AppLayout() {
           <span className={'status ' + (online ? 'online' : 'offline')}>
             {online ? <Wifi size={16} /> : <WifiOff size={16} />}
             {health.isPending ? t('service.checking') : online ? t('service.online') : t('service.offline')}
+          </span>
+
+          {/* Where the pending work is waiting is not a detail the user should have to guess. */}
+          <span className="status" title={t('storage.' + localStore.mode + 'Hint')}>
+            {localStore.mode === 'browser' ? <HardDrive size={16} /> : <Database size={16} />}
+            {t('storage.' + localStore.mode)}
           </span>
 
           <label className="inline-field">

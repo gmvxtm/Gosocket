@@ -109,6 +109,26 @@ services:
       timeout: 3s
       retries: 6
 
+  # Same application built for a client that cannot run the local service, such as a phone:
+  # the queue lives in IndexedDB and the service is only contacted to synchronize.
+  web-browser:
+    build:
+      context: ./web
+      args:
+        VITE_SYNC_SERVICE_URL: http://localhost:3001
+        VITE_LOCAL_STORE: browser
+    container_name: offline-requests-web-browser
+    ports:
+      - "127.0.0.1:8081:80"
+    depends_on:
+      sync-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
 volumes:
   local-data:
   central-data:

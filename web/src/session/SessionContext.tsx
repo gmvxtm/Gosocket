@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { authApi, setAccessToken, type Credentials, type Session } from '../api';
+import { localStore } from '../local';
 
 interface SessionValue {
   session: Session | null;
@@ -12,6 +13,12 @@ interface SessionValue {
 const SessionContext = createContext<SessionValue | null>(null);
 
 const storageKey = 'offline-requests.session';
+
+/** The token identifies the caller and the username owns whatever is stored in this browser. */
+function adopt(session: Session | null) {
+  setAccessToken(session?.token ?? '');
+  localStore.setOwner(session?.username ?? '');
+}
 
 /** A stored session is only useful while the token is still valid. */
 function readStoredSession(): Session | null {
@@ -37,14 +44,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
   const [session, setSession] = useState<Session | null>(() => {
     const stored = readStoredSession();
-    setAccessToken(stored?.token ?? '');
+    adopt(stored);
     return stored;
   });
   const [reason, setReason] = useState('');
 
   const signIn = useCallback(async (credentials: Credentials) => {
     const issued = await authApi.login(credentials);
-    setAccessToken(issued.token);
+    adopt(issued);
     writeStoredSession(issued);
     setSession(issued);
     setReason('');
@@ -52,7 +59,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback((why = '') => {
-    setAccessToken('');
+    adopt(null);
     writeStoredSession(null);
     setSession(null);
     setReason(why);

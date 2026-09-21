@@ -91,12 +91,23 @@ export const authApi = {
     request<{ id: string; username: string; displayName: string }>('/session', { signal })
 };
 
+/** What a client that keeps its own queue hands over for processing and forwarding. */
+export interface OutboxRequest {
+  id: string;
+  name: string;
+  type: string;
+  payload: string;
+  createdAt: string;
+}
+
 export const requestsApi = {
   health: (signal?: AbortSignal) => request<{ status: string }>('/health', { signal }),
   processors: (signal?: AbortSignal) => request<string[]>('/processors', { signal }),
   list: (signal?: AbortSignal) => request<LocalRequest[]>('/requests', { signal }),
   create: (input: CreateRequestInput) => request<LocalRequest>('/requests', { method: 'POST', body: JSON.stringify(input) }),
-  synchronize: () => request<SyncResult>('/sync', { method: 'POST' })
+  synchronize: () => request<SyncResult>('/sync', { method: 'POST' }),
+  syncBatch: (requests: OutboxRequest[]) =>
+    request<SyncResult>('/sync/batch', { method: 'POST', body: JSON.stringify({ requests }) })
 };
 
 export const groupsApi = {
