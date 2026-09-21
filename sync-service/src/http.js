@@ -61,6 +61,8 @@ export function createHttpServer({ application, backendUrl, session, logger = co
       if (request.method === 'GET' && pathname === '/requests') return json(response, 200, await application.listRequests());
       if (request.method === 'POST' && pathname === '/requests') return json(response, 201, await application.createRequest(await readBody(request)));
       if (request.method === 'POST' && pathname === '/sync') return json(response, 200, await application.synchronize(null, token));
+      // Clients that keep the queue in the browser send it here: this route stores nothing.
+      if (request.method === 'POST' && pathname === '/sync/batch') return json(response, 200, await application.synchronizeBatch(await readBody(request), token));
       if (request.method === 'GET' && pathname === '/groups') return json(response, 200, await application.listGroups());
       if (request.method === 'POST' && pathname === '/groups') return json(response, 201, await application.createGroup(await readBody(request)));
 

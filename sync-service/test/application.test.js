@@ -109,3 +109,38 @@ test('an empty group cannot accidentally synchronize all pending requests', asyn
   assert.equal((await app.synchronizeGroup(groupId)).sent, 0);
   assert.equal(rows[0].status, 'Pending');
 });
+
+test('a client keeping its own queue gets each request answered without local persistence', async () => {
+  const { app, rows } = fixture();
+  const requests = [
+    { id: randomUUID(), name: 'Order', type: 'text.uppercase', payload: 'hello', createdAt: new Date().toISOString() },
+    { id: randomUUID(), name: 'Broken', type: 'json.normalize', payload: '{invalid', createdAt: new Date().toISOString() },
+    { id: randomUUID(), name: 'Outdated', type: 'text.reverse', payload: 'hello', createdAt: new Date().toISOString() }
+  ];
+  const result = await app.synchronizeBatch({ requests });
+  assert.equal(result.sent, 1);
+  assert.equal(result.acknowledgements[0].id, requests[0].id);
+  assert.deepEqual(result.failed.map(failure => failure.id), [requests[1].id, requests[2].id]);
+  assert.equal(rows.length, 0);
+});
+
+test('a client batch is rejected when it is malformed or too large', async () => {
+  const { app } = fixture();
+  const valid = { id: randomUUID(), name: 'Order', type: 'text.uppercase', payload: 'hello', createdAt: new Date().toISOString() };
+  await assert.rejects(app.synchronizeBatch({}), /requests must be an array/);
+  await assert.rejects(app.synchronizeBatch({ requests: [{ ...valid, id: 'invalid' }] }), /Invalid id/);
+  await assert.rejects(app.synchronizeBatch({ requests: [{ ...valid, createdAt: 'yesterday' }] }), /createdAt/);
+  await assert.rejects(app.synchronizeBatch({ requests: Array.from({ length: 101 }, () => valid) }), /at most 100/);
+});
+
+test('client batches are not blocked by the local synchronization guard', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const { app } = fixture([{}], { register: async batch => { await gate; return batch.map(row => ({ id: row.id, status: 'Processed' })); } });
+  const local = app.synchronize();
+  const requests = [{ id: randomUUID(), name: 'Order', type: 'text.uppercase', payload: 'hello', createdAt: new Date().toISOString() }];
+  const batch = app.synchronizeBatch({ requests });
+  release();
+  await local;
+  assert.equal((await batch).sent, 1);
+});

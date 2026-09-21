@@ -101,3 +101,27 @@ test('the token reaches the synchronization, so it can be forwarded to the backe
 
   assert.equal(received, auth.authorization.slice(7));
 });
+
+test('a client queue arrives at the batch route with the same session token', async t => {
+  let received = null;
+  const url = await start(t, { synchronizeBatch: async (body, token) => { received = { body, token }; return { sent: 1, failed: [], acknowledgements: [] }; } });
+
+  const response = await fetch(url + '/sync/batch', {
+    method: 'POST',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ requests: [{ id: 'local' }] })
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).sent, 1);
+  assert.deepEqual(received.body.requests, [{ id: 'local' }]);
+  assert.equal(received.token, auth.authorization.slice(7));
+});
+
+test('a client queue cannot be synchronized without a session', async t => {
+  const url = await start(t, { synchronizeBatch: async () => ({ sent: 1 }) });
+
+  const response = await fetch(url + '/sync/batch', { method: 'POST', body: JSON.stringify({ requests: [] }) });
+
+  assert.equal(response.status, 401);
+});
