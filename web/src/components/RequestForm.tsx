@@ -20,9 +20,7 @@ export function RequestForm({ processors, pending, onCreate }: Props) {
     if (!form.name.trim()) { setError(t('form.nameRequired')); return; }
     setError('');
     try {
-      console.log('DEBUG submit inicio');
       await onCreate({ ...form, name: form.name.trim() });
-      console.log('DEBUG submit resuelto');
       setForm({ name: '', type: form.type, payload: '' });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
