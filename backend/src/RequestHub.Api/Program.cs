@@ -62,6 +62,17 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
+app.UseSerilogRequestLogging(options =>
+{
+    // Keep request logging outside authentication so rejected requests are logged too.
+    // The container probes /health every few seconds; at Verbose it stays below the minimum level.
+    options.GetLevel = (context, _, exception) => exception is not null
+        ? LogEventLevel.Error
+        : context.Request.Path.StartsWithSegments("/health")
+            ? LogEventLevel.Verbose
+            : LogEventLevel.Information;
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -80,16 +91,6 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
-app.UseSerilogRequestLogging(options =>
-{
-    // The container probes /health every few seconds; at Verbose it stays below the minimum level.
-    options.GetLevel = (context, _, exception) => exception is not null
-        ? LogEventLevel.Error
-        : context.Request.Path.StartsWithSegments("/health")
-            ? LogEventLevel.Verbose
-            : LogEventLevel.Information;
-});
 
 app.MapPost("/auth/login", async (
     LoginDto credentials,
