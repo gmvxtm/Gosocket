@@ -105,8 +105,18 @@ La sesion vive en React Context: el token queda en memoria del cliente API, se p
 Redux Toolkit guarda preferencias compartidas de idioma y tema, persistidas en localStorage. useState queda para formularios, filtros y seleccion temporal.
 
 networkMode: always permite intentar consultar localhost aunque el navegador marque Internet como desconectado.
-Esto no crea una cache durable del navegador: para trabajar sin Internet deben estar disponibles el frontend servido localmente, Node.js y PostgreSQL local.
 La sincronizacion es manual. El indicador del servicio local comprueba PostgreSQL; no indica disponibilidad del backend central.
+
+La persistencia local esta detras del puerto `LocalStore` (`web/src/local/store.ts`), con dos implementaciones que se eligen al compilar con `VITE_LOCAL_STORE`:
+
+| Modo | Donde queda lo pendiente | Para que cliente |
+| --- | --- | --- |
+| `service` | PostgreSQL del servicio local, via HTTP | Un equipo donde ese servicio esta instalado |
+| `browser` | IndexedDB, base `offline-requests` | Un cliente que no puede correr el servicio, como un telefono |
+
+En el modo `browser` el navegador es la cola durable: genera el `Id`, guarda la solicitud como `Pending` y la envia en lotes de 50 a `POST /sync/batch`. Ese endpoint no persiste nada, aplica la estrategia por tipo y reenvia al backend; el navegador escribe las confirmaciones antes del siguiente lote, de modo que una caida a mitad de camino no deshace lo ya registrado. El recorrido del arbol de agrupaciones se resuelve en el cliente con el mismo Composite.
+Cada fila guarda el usuario que la creo y toda lectura se filtra por el indice `owner`, para que en un dispositivo compartido una cuenta no vea la cola de otra. Las preferencias y la sesion siguen en localStorage, que por tamano y criticidad es donde corresponden.
+Falta el service worker: sin el, abrir la pagina sin red no funciona aunque la cola este guardada. La decision, las alternativas evaluadas y los limites estan en [donde vive la cola local](adr/0001-donde-vive-la-cola-local.md).
 
 ## Decisiones de alcance
 

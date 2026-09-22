@@ -9,6 +9,9 @@ Aplicacion fullstack offline-first para crear solicitudes localmente, procesarla
 - `backend/`: API .NET 10. Registra solicitudes procesadas en PostgreSQL central.
 - `docker-compose.yml`: despliega los tres servicios y las bases `requests_local` y `requests_central`.
 
+La cola de pendientes puede vivir en dos sitios, y se elige al compilar el frontend. Ver
+[donde vive la cola local](docs/adr/0001-donde-vive-la-cola-local.md).
+
 ## Requisitos
 
 - Docker: suficiente para desplegar la solucion completa.
@@ -39,13 +42,21 @@ DATABASE_URL=postgres://app:app@localhost:5432/requests_local
 
 `HOST` define la interfaz de escucha. Fuera de Docker conviene dejar loopback; la imagen usa `0.0.0.0` para ser alcanzable dentro de la red de compose.
 
-Variable del frontend, leida al compilar:
+Variables del frontend, leidas al compilar:
 
 ```text
 VITE_SYNC_SERVICE_URL=http://localhost:3001
+VITE_LOCAL_STORE=service
 ```
 
-En el despliegue se pasa como argumento de build en `docker-compose.yml`. Apunta al puerto publicado del sync-service porque la peticion sale del navegador, no del contenedor.
+En el despliegue se pasan como argumentos de build en `docker-compose.yml`. La URL apunta al puerto publicado del sync-service porque la peticion sale del navegador, no del contenedor.
+
+`VITE_LOCAL_STORE` decide donde se guarda lo pendiente:
+
+- `service` (por defecto): en el PostgreSQL del servicio local. Es el modo para un equipo donde ese servicio esta instalado.
+- `browser`: en IndexedDB, dentro del navegador. Es el modo para un cliente que no puede correr el servicio, como un telefono. El sync-service se usa solo al sincronizar, a traves de `POST /sync/batch`.
+
+Las dos variantes implementan el mismo puerto `LocalStore` (`web/src/local/`), asi que las pantallas no cambian. La cabecera muestra cual esta activo.
 
 El backend toma su cadena de conexion de `ConnectionStrings__Default`; el valor por defecto de `appsettings.json` apunta a `localhost:5433`.
 
@@ -62,7 +73,8 @@ El backend aplica sus migraciones y el sync-service crea su esquema al iniciar, 
 
 URLs:
 
-- Frontend: `http://localhost:8080`
+- Frontend, cola en el equipo: `http://localhost:8080`
+- Frontend, cola en el navegador: `http://localhost:8081`
 - Sync-service: `http://localhost:3001`
 - Backend: `http://localhost:5080`
 - PostgreSQL local: `localhost:5432`; central: `localhost:5433`
@@ -122,11 +134,13 @@ El frontend de desarrollo queda en `http://localhost:5173`. Si el stack completo
 5. El backend guarda eventos de auditoria en `log.SyncIssues` cuando detecta Id repetidos en un lote o reenvios ya registrados.
 6. El sync-service marca como `Processed` solo las confirmadas. Los errores de procesamiento quedan `Failed`; las solicitudes sin confirmacion permanecen `Pending` para un nuevo envio.
 
-El modo offline requiere que el frontend, Node.js y PostgreSQL local esten disponibles. La sincronizacion es manual, con hasta tres intentos por lote ante fallos transitorios del backend.
+Con `VITE_LOCAL_STORE=browser` los pasos 1 y 2 ocurren dentro del navegador: la solicitud se guarda en IndexedDB con el `Id` que genera el propio cliente, y al sincronizar se envia en lotes de 50 a `POST /sync/batch`. Ese endpoint no guarda nada: aplica la estrategia por tipo, reenvia al backend y devuelve las confirmaciones, que el navegador escribe en su cola antes de mandar el siguiente lote. El paso 6 es identico, solo cambia quien anota el estado.
+
+La sincronizacion es manual, con hasta tres intentos por lote ante fallos transitorios del backend. En el modo `service`, trabajar sin conexion requiere que el frontend, Node.js y PostgreSQL local esten disponibles. En el modo `browser` basta el navegador, con dos salvedades: la primera carga necesita conexion para traer el catalogo de tipos, y todavia no hay service worker, de modo que abrir la pagina sin red no funciona.
 
 ## Patrones y decisiones
 
-El backend usa Clean Architecture, CQRS con MediatR, validacion por pipeline, JWT, rate limiting y EF Core como Unit of Work. Node separa transporte, casos de uso y persistencia mediante dependencias inyectadas; utiliza Strategy para procesadores y Composite para grupos. React separa datos remotos (React Query), sesion (Context), preferencias compartidas (Redux) y estado local de UI (useState).
+El backend usa Clean Architecture, CQRS con MediatR, validacion por pipeline, JWT, rate limiting y EF Core como Unit of Work. Node separa transporte, casos de uso y persistencia mediante dependencias inyectadas; utiliza Strategy para procesadores y Composite para grupos. React separa datos remotos (React Query), sesion (Context), preferencias compartidas (Redux) y estado local de UI (useState), y aisla la persistencia local detras del puerto `LocalStore`, con una implementacion sobre el servicio y otra sobre IndexedDB.
 
 Ver [arquitectura, patrones y limites](docs/architecture.md) para el flujo, ubicacion de cada patron, garantias de entrega y decisiones de alcance.
 
