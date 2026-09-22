@@ -9,6 +9,8 @@ interface Props {
   onCreate: (input: CreateRequestInput) => Promise<LocalRequest>;
 }
 
+// Every field updates from the current state and not from the one captured when it rendered:
+// two keystrokes close together can otherwise land on the same snapshot and one overwrites the other.
 export function RequestForm({ processors, pending, onCreate }: Props) {
   const { t } = useTranslation();
   const [form, setForm] = useState<CreateRequestInput>({ name: '', type: 'text.uppercase', payload: '' });
@@ -21,7 +23,7 @@ export function RequestForm({ processors, pending, onCreate }: Props) {
     setError('');
     try {
       await onCreate({ ...form, name: form.name.trim() });
-      setForm({ name: '', type: form.type, payload: '' });
+      setForm(current => ({ name: '', type: current.type, payload: '' }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -33,16 +35,16 @@ export function RequestForm({ processors, pending, onCreate }: Props) {
       <fieldset disabled={pending}>
         <label>{t('form.name')}
           <input required maxLength={200} value={form.name} placeholder={t('form.namePlaceholder')}
-            onChange={event => setForm({ ...form, name: event.target.value })} />
+            onChange={event => setForm(current => ({ ...current, name: event.target.value }))} />
         </label>
         <label>{t('form.type')}
-          <select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}>
+          <select value={form.type} onChange={event => setForm(current => ({ ...current, type: event.target.value }))}>
             {(processors.length ? processors : ['text.uppercase']).map(type => <option key={type} value={type}>{type}</option>)}
           </select>
         </label>
         <label>{t('form.payload')}
           <textarea maxLength={65536} value={form.payload} placeholder={t('form.payloadPlaceholder')}
-            onChange={event => setForm({ ...form, payload: event.target.value })} />
+            onChange={event => setForm(current => ({ ...current, payload: event.target.value }))} />
         </label>
         <button className="primary full" type="submit">
           <Plus size={18} />{pending ? t('actions.creating') : t('actions.create')}
